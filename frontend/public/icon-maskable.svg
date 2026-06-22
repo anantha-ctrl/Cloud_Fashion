@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#0b0b0f"/>
+  <g transform="translate(106 150)">
+    <path d="M40 150a90 90 0 0 1 168-45A65 65 0 0 1 195 230H60a52 52 0 0 1-20-80z" fill="#c9a96a"/>
+    <text x="150" y="120" font-family="Playfair Display, serif" font-size="120" fill="#c9a96a" text-anchor="middle" font-weight="700">CF</text>
+  </g>
+</svg>
