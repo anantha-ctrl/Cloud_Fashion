@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useEffect, useState, useRef } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { Star, Heart, Truck, RefreshCw, ShieldCheck, Minus, Plus, BadgeCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/client';
@@ -11,9 +11,14 @@ import ProductCard from '../components/ProductCard';
 import { Spinner, SectionTitle } from '../components/ui';
 import Seo from '../components/Seo';
 import RecentlyViewed, { pushLocalRecent } from '../components/RecentlyViewed';
+import SizeGuideModal from '../components/SizeGuideModal';
+import NotifyStock from '../components/NotifyStock';
+import ShareButtons from '../components/ShareButtons';
+import { Ruler } from 'lucide-react';
 
 export default function ProductDetails() {
   const { slug } = useParams();
+  const navigate = useNavigate();
   const { add } = useCart();
   const { has, toggle } = useWishlist();
   const { user } = useAuth();
@@ -26,19 +31,27 @@ export default function ProductDetails() {
   const [qty, setQty] = useState(1);
   const [zoom, setZoom] = useState({ on: false, x: 50, y: 50 });
   const [reviewForm, setReviewForm] = useState({ rating: 5, title: '', comment: '' });
+  const [sizeGuide, setSizeGuide] = useState(false);
+  const touchX = useRef(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
     setProduct(null);
-    api.get(`/api/products/${slug}`).then((r) => {
-      const p = r.data.data;
-      setProduct(p);
-      pushLocalRecent(p); // track for guests + users
-      const id = p.id;
-      api.get(`/api/products/${slug}/related`).then((x) => setRelated(x.data.data)).catch(() => {});
-      api.get(`/api/products/${id}/reviews`).then((x) => setReviews(x.data.data)).catch(() => {});
-      if (user) api.post('/api/recently-viewed', { product_id: id }).catch(() => {});
-    }).catch(() => toast.error('Product not found'));
+    let cancelled = false;
+    api.get(`/api/products/${slug}`)
+      .then((r) => {
+        if (cancelled) return;
+        const p = r.data.data;
+        setProduct(p);
+        try { pushLocalRecent(p); } catch { /* localStorage quota — ignore */ }
+        const id = p.id;
+        api.get(`/api/products/${slug}/related`).then((x) => !cancelled && setRelated(x.data.data)).catch(() => {});
+        api.get(`/api/products/${id}/reviews`).then((x) => !cancelled && setReviews(x.data.data)).catch(() => {});
+        if (user) api.post('/api/recently-viewed', { product_id: id }).catch(() => {});
+      })
+      // Only a genuine failure of the product fetch should show this.
+      .catch(() => { if (!cancelled) toast.error('Product not found'); });
+    return () => { cancelled = true; };
   }, [slug, user]);
 
   if (!product) return <Spinner className="min-h-[60vh]" />;
@@ -46,10 +59,21 @@ export default function ProductDetails() {
   const variant = product.variants?.find((v) => (!product.sizes.length || v.size === size) && (!product.colors.length || v.color === color));
   const inStock = (variant?.stock ?? product.stock) > 0;
 
+  const validateSelection = () => {
+    if (product.sizes.length && !size) { toast.error('Please select a size'); return false; }
+    if (product.colors.length && !color) { toast.error('Please select a color'); return false; }
+    return true;
+  };
+
   const addToCart = () => {
-    if (product.sizes.length && !size) return toast.error('Please select a size');
-    if (product.colors.length && !color) return toast.error('Please select a color');
-    add(product.id, variant?.id ?? null, qty);
+    if (!validateSelection()) return;
+    add(product, variant?.id ?? null, qty, variant);
+  };
+
+  const buyNow = async () => {
+    if (!validateSelection()) return;
+    const ok = await add(product, variant?.id ?? null, qty, variant);
+    if (ok) navigate('/checkout');
   };
 
   const submitReview = async (e) => {
@@ -94,6 +118,15 @@ export default function ProductDetails() {
               const r = e.currentTarget.getBoundingClientRect();
               setZoom({ on: true, x: ((e.clientX - r.left) / r.width) * 100, y: ((e.clientY - r.top) / r.height) * 100 });
             }}
+            onTouchStart={(e) => { touchX.current = e.touches[0].clientX; }}
+            onTouchEnd={(e) => {
+              if (touchX.current == null) return;
+              const dx = e.changedTouches[0].clientX - touchX.current;
+              const n = product.images?.length || 1;
+              if (dx < -40) setActiveImg((i) => (i + 1) % n);
+              else if (dx > 40) setActiveImg((i) => (i - 1 + n) % n);
+              touchX.current = null;
+            }}
           >
             <img
               src={product.images?.[activeImg]?.image_url || 'https://via.placeholder.com/600x800'}
@@ -101,6 +134,14 @@ export default function ProductDetails() {
               className="h-full w-full object-cover transition-transform duration-200"
               style={zoom.on ? { transform: 'scale(2)', transformOrigin: `${zoom.x}% ${zoom.y}%` } : {}}
             />
+            {/* swipe dots (mobile) */}
+            {product.images?.length > 1 && (
+              <div className="absolute bottom-3 left-1/2 flex -translate-x-1/2 gap-1.5 lg:hidden">
+                {product.images.map((_, i) => (
+                  <span key={i} className={`h-1.5 rounded-full transition-all ${i === activeImg ? 'w-5 bg-gold' : 'w-1.5 bg-white/60'}`} />
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
@@ -129,7 +170,22 @@ export default function ProductDetails() {
           <p className="mt-5 text-gray-500 dark:text-gray-300">{product.description}</p>
 
           {product.sizes?.length > 0 && (
-            <Selector label="Size" options={product.sizes} value={size} onChange={setSize} />
+            <div className="mt-6">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm font-semibold uppercase tracking-wider">Size</p>
+                <button onClick={() => setSizeGuide(true)} className="flex items-center gap-1 text-xs text-gold hover:underline">
+                  <Ruler size={13} /> Size Guide
+                </button>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {product.sizes.map((o) => (
+                  <button key={o} onClick={() => setSize(o)}
+                    className={`min-w-[3rem] rounded-xl border px-4 py-2 text-sm font-medium transition ${size === o ? 'border-gold bg-gold/10 text-gold' : 'border-black/10 dark:border-white/10'}`}>
+                    {o}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
           {product.colors?.length > 0 && (
             <div className="mt-6">
@@ -155,12 +211,19 @@ export default function ProductDetails() {
             </span>
           </div>
 
-          <div className="mt-6 flex gap-3">
-            <button onClick={addToCart} disabled={!inStock} className="btn-gold flex-1">Add to Cart</button>
-            <button onClick={() => toggle(product.id)} className="btn-outline !px-4">
-              <Heart size={20} className={has(product.id) ? 'fill-rose-500 text-rose-500' : ''} />
-            </button>
-          </div>
+          {inStock ? (
+            <div className="mt-6 flex flex-wrap gap-3">
+              <button onClick={addToCart} className="btn-outline flex-1 min-w-[8rem]">Add to Cart</button>
+              <button onClick={buyNow} className="btn-gold flex-1 min-w-[8rem]">Buy Now</button>
+              <button onClick={() => toggle(product)} className="btn-outline !px-4" aria-label="wishlist">
+                <Heart size={20} className={has(product.id) ? 'fill-rose-500 text-rose-500' : ''} />
+              </button>
+            </div>
+          ) : (
+            <NotifyStock productId={product.id} />
+          )}
+
+          <ShareButtons title={product.name} />
 
           <div className="mt-8 grid grid-cols-3 gap-4 border-t border-black/5 pt-6 text-center text-xs dark:border-white/10">
             {[[Truck, 'Free Shipping'], [RefreshCw, '7-Day Returns'], [ShieldCheck, 'Secure Payment']].map(([Icon, t]) => (
@@ -190,6 +253,7 @@ export default function ProductDetails() {
       <div className="mt-14 grid gap-10 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <h2 className="mb-4 font-display text-2xl font-bold">Customer Reviews</h2>
+          {reviews.length > 0 && <RatingBreakdown reviews={reviews} avg={product.rating_avg} />}
           {reviews.length === 0 && <p className="text-gray-400">No reviews yet. Be the first!</p>}
           <div className="space-y-4">
             {reviews.map((r) => (
@@ -244,20 +308,40 @@ export default function ProductDetails() {
       )}
 
       <RecentlyViewed excludeId={product.id} />
+
+      {sizeGuide && <SizeGuideModal category={product.category_name} onClose={() => setSizeGuide(false)} />}
     </div>
   );
 }
 
-const Selector = ({ label, options, value, onChange }) => (
-  <div className="mt-6">
-    <p className="mb-2 text-sm font-semibold uppercase tracking-wider">{label}</p>
-    <div className="flex flex-wrap gap-2">
-      {options.map((o) => (
-        <button key={o} onClick={() => onChange(o)}
-          className={`min-w-[3rem] rounded-xl border px-4 py-2 text-sm font-medium transition ${value === o ? 'border-gold bg-gold/10 text-gold' : 'border-black/10 dark:border-white/10'}`}>
-          {o}
-        </button>
-      ))}
+function RatingBreakdown({ reviews, avg }) {
+  const total = reviews.length;
+  const counts = [5, 4, 3, 2, 1].map((star) => ({
+    star,
+    n: reviews.filter((r) => r.rating === star).length,
+  }));
+  return (
+    <div className="card mb-6 flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
+      <div className="text-center sm:w-32">
+        <p className="font-display text-4xl font-bold">{Number(avg).toFixed(1)}</p>
+        <div className="mt-1 flex justify-center gap-0.5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Star key={i} size={14} className={i < Math.round(avg) ? 'fill-amber-500 text-amber-500' : 'text-gray-300'} />
+          ))}
+        </div>
+        <p className="mt-1 text-xs text-gray-400">{total} review{total !== 1 ? 's' : ''}</p>
+      </div>
+      <div className="flex-1 space-y-1.5">
+        {counts.map(({ star, n }) => (
+          <div key={star} className="flex items-center gap-2 text-xs">
+            <span className="w-6 text-gray-400">{star}★</span>
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-black/5 dark:bg-white/10">
+              <div className="h-full rounded-full bg-amber-500" style={{ width: `${total ? (n / total) * 100 : 0}%` }} />
+            </div>
+            <span className="w-6 text-right text-gray-400">{n}</span>
+          </div>
+        ))}
+      </div>
     </div>
-  </div>
-);
+  );
+}

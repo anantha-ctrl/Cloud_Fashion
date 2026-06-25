@@ -12,14 +12,22 @@ export function getLocalRecent() {
 /** Pushes a product onto the recently-viewed list (most-recent first, max 12, deduped). */
 export function pushLocalRecent(product) {
   if (!product?.id) return;
+  const img = product.image || product.images?.[0]?.image_url || null;
   const slim = {
     id: product.id, name: product.name, slug: product.slug, brand: product.brand,
     price: product.price, mrp: product.mrp, rating_avg: product.rating_avg,
     discount_pct: product.discount_pct,
-    image: product.image || product.images?.[0]?.image_url || null,
+    // Never persist heavy base64 data-URIs to localStorage — they blow the
+    // ~5MB quota and make setItem throw. Keep only real (http) image URLs.
+    image: img && img.startsWith('data:') ? null : img,
   };
   const list = [slim, ...getLocalRecent().filter((p) => p.id !== product.id)].slice(0, 12);
-  localStorage.setItem('cf_recent', JSON.stringify(list));
+  try {
+    localStorage.setItem('cf_recent', JSON.stringify(list));
+  } catch {
+    // Quota exceeded (likely legacy base64 entries) — reset to just this item.
+    try { localStorage.setItem('cf_recent', JSON.stringify([slim])); } catch { /* ignore */ }
+  }
 }
 
 export default function RecentlyViewed({ excludeId, title = 'Recently Viewed', limit = 4 }) {

@@ -23,12 +23,22 @@ export default function Shop() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [categoryName, setCategoryName] = useState('');
   const [filters, setFilters] = useState({
     sort: params.get('sort') || 'newest',
     sizes: [], colors: [], min: '', max: '',
   });
 
   const search = params.get('search') || '';
+
+  // Resolve the real category name from its slug (slugs can carry a suffix,
+  // e.g. "jewellery-3c4a", so we must not derive the title from the slug).
+  useEffect(() => {
+    if (!slug) { setCategoryName(''); return; }
+    api.get('/api/categories')
+      .then((r) => setCategoryName(r.data.data.find((c) => c.slug === slug)?.name || ''))
+      .catch(() => setCategoryName(''));
+  }, [slug]);
 
   const fetchProducts = useCallback(async (pageNum, append) => {
     append ? setLoadingMore(true) : setLoading(true);
@@ -57,7 +67,9 @@ export default function Shop() {
   const toggleArr = (key, val) =>
     setFilters((f) => ({ ...f, [key]: f[key].includes(val) ? f[key].filter((x) => x !== val) : [...f[key], val] }));
 
-  const title = slug ? slug.charAt(0).toUpperCase() + slug.slice(1) : search ? `Results for "${search}"` : 'All Products';
+  const title = slug
+    ? (categoryName || slug.replace(/-[a-z0-9]{4}$/i, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
+    : search ? `Results for "${search}"` : 'All Products';
 
   const FilterPanel = (
     <div className="space-y-7">

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Instagram, Facebook, Twitter, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/client';
+import Logo from './Logo';
 
 export default function Footer() {
   const [email, setEmail] = useState('');
@@ -17,10 +18,10 @@ export default function Footer() {
   };
 
   return (
-    <footer className="mt-20 border-t border-black/5 bg-ink text-gray-300 dark:border-white/10">
+    <footer className="mt-20 border-t border-black/5 bg-ink pb-16 text-gray-300 dark:border-white/10 md:pb-0">
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-14 sm:grid-cols-2 lg:grid-cols-4">
         <div>
-          <span className="font-display text-2xl font-bold text-white">Cloud<span className="text-gold">Fashion</span></span>
+          <Logo white className="h-14" />
           <p className="mt-4 text-sm text-gray-400">Premium fashion, curated for the modern wardrobe. Timeless pieces, crafted with care.</p>
           <div className="mt-5 flex gap-3">
             {[Instagram, Facebook, Twitter].map((Icon, i) => (
@@ -55,7 +56,7 @@ export default function Footer() {
         </div>
       </div>
       <div className="border-t border-white/10 py-5 text-center text-xs text-gray-500">
-        © {new Date().getFullYear()} Cloud Fashion. All rights reserved. Crafted with care.
+        © {new Date().getFullYear()} Cloud Fashion. All rights reserved. Designed and Developed By <a href="https://cloudhawk.in/">CloudHawk</a>.
       </div>
     </footer>
   );

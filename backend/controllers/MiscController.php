@@ -30,6 +30,45 @@ class MiscController
         Response::success(null, 'Message sent. We will get back to you soon.');
     }
 
+    /** Public list of active, non-expired coupons (for the offers banner). */
+    public function offers(array $p): void
+    {
+        $rows = db()->query(
+            "SELECT code, type, value, min_order, max_discount, first_order_only, expires_at
+             FROM coupons
+             WHERE is_active = 1
+               AND (expires_at IS NULL OR expires_at > NOW())
+               AND (usage_limit IS NULL OR used_count < usage_limit)
+             ORDER BY value DESC"
+        )->fetchAll();
+        Response::success($rows);
+    }
+
+    /** Public homepage banners. */
+    public function banners(array $p): void
+    {
+        $rows = db()->query(
+            'SELECT id, title, subtitle, cta_label, cta_link, image_url
+             FROM banners WHERE is_active = 1 ORDER BY sort_order, id'
+        )->fetchAll();
+        Response::success($rows);
+    }
+
+    /** Register interest in an out-of-stock product. */
+    public function notifyStock(array $p): void
+    {
+        $data = Request::body();
+        $productId = (int) ($data['product_id'] ?? 0);
+        $email = $data['email'] ?? null;
+        if (!$productId || !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+            Response::error('Valid product and email are required', 422);
+        }
+        db()->prepare(
+            'INSERT IGNORE INTO stock_notifications (product_id, email) VALUES (?,?)'
+        )->execute([$productId, $email]);
+        Response::success(null, "We'll email you when it's back in stock");
+    }
+
     public function recentlyViewed(array $p): void
     {
         $userId = Auth::id();

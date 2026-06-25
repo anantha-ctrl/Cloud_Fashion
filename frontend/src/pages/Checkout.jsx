@@ -19,20 +19,27 @@ export default function Checkout() {
   const [showForm, setShowForm] = useState(false);
   const [coupon, setCoupon] = useState('');
   const [discount, setDiscount] = useState(0);
+  const [appliedCode, setAppliedCode] = useState('');
   const [method, setMethod] = useState('razorpay');
   const [placing, setPlacing] = useState(false);
+  const [offers, setOffers] = useState([]);
+  const [shipInfo, setShipInfo] = useState(null);
 
   useEffect(() => {
     if (!cart.items.length) navigate('/cart');
     loadAddresses();
+    api.get('/api/offers').then((r) => setOffers(r.data.data)).catch(() => {});
+    api.get('/api/shipping-info').then((r) => setShipInfo(r.data.data)).catch(() => {});
   }, []);
 
   const loadAddresses = async () => {
-    const { data } = await api.get('/api/addresses');
-    setAddresses(data.data);
-    const def = data.data.find((a) => a.is_default) || data.data[0];
-    if (def) setSelected(def.id);
-    if (!data.data.length) setShowForm(true);
+    try {
+      const { data } = await api.get('/api/addresses');
+      setAddresses(data.data);
+      const def = data.data.find((a) => a.is_default) || data.data[0];
+      if (def) setSelected(def.id);
+      if (!data.data.length) setShowForm(true);
+    } catch { /* 401/expired — auth interceptor handles redirect */ }
   };
 
   const saveAddress = async (e) => {
@@ -46,16 +53,28 @@ export default function Checkout() {
     } catch (err) { toast.error(err.message); }
   };
 
-  const applyCoupon = async () => {
+  const applyCoupon = async (codeArg) => {
+    const code = (codeArg || coupon).trim();
+    if (!code) return;
     try {
-      const { data } = await api.post('/api/coupons/apply', { code: coupon, subtotal: cart.summary.subtotal });
+      const { data } = await api.post('/api/coupons/apply', { code, subtotal: cart.summary.subtotal });
       setDiscount(data.data.discount);
+      setCoupon(code);
+      setAppliedCode(code);
       toast.success(`Coupon applied: -${inr(data.data.discount)}`);
-    } catch (err) { setDiscount(0); toast.error(err.message); }
+    } catch (err) { setDiscount(0); setAppliedCode(''); toast.error(err.message); }
   };
 
+  const offerLabel = (o) =>
+    o.type === 'percentage'
+      ? `${Number(o.value)}% OFF${o.max_discount ? ` up to ${inr(o.max_discount)}` : ''}`
+      : `${inr(o.value)} OFF`;
+
   const subtotal = cart.summary.subtotal;
-  const shipping = subtotal - discount >= 1999 ? 0 : 79;
+  const freeMin = shipInfo?.free_shipping_min ?? 1999;
+  const baseShip = shipInfo?.base_shipping ?? 79;
+  // First order ships free; repeat orders are free only above the threshold.
+  const shipping = shipInfo?.is_first_order ? 0 : (subtotal - discount >= freeMin ? 0 : baseShip);
   const total = Math.max(0, subtotal - discount + shipping);
 
   const loadRazorpay = () =>
@@ -99,6 +118,7 @@ export default function Checkout() {
         amount: order.amount,
         currency: order.currency,
         name: 'Cloud Fashion',
+        image: `${window.location.origin}/logo.png`,
         description: `Order ${order.order_number}`,
         order_id: order.razorpay_order_id,
         prefill: { name: user.name, email: user.email, contact: user.phone || '' },
@@ -190,15 +210,39 @@ export default function Checkout() {
             ))}
           </div>
 
-          <div className="mb-4 flex gap-2">
+          <div className="mb-2 flex gap-2">
             <input className="input !py-2 text-sm" placeholder="Coupon code" value={coupon}
               onChange={(e) => setCoupon(e.target.value.toUpperCase())} />
-            <button onClick={applyCoupon} className="btn-outline !px-4 !py-2 text-sm"><Tag size={14} /> Apply</button>
+            <button onClick={() => applyCoupon()} className="btn-outline !px-4 !py-2 text-sm"><Tag size={14} /> Apply</button>
           </div>
+
+          {/* Available coupons (live from backend) */}
+          {offers.length > 0 && (
+            <div className="mb-4">
+              <p className="mb-1.5 text-xs text-gray-400">Available offers — tap to apply:</p>
+              <div className="flex flex-wrap gap-2">
+                {offers.map((o) => {
+                  const active = appliedCode === o.code;
+                  return (
+                    <button key={o.code} onClick={() => applyCoupon(o.code)} title={`${offerLabel(o)}${Number(o.min_order) > 0 ? ` · min ${inr(o.min_order)}` : ''}`}
+                      className={`flex items-center gap-1 rounded-lg border px-2 py-1 text-xs font-semibold transition ${active ? 'border-gold bg-gold/15 text-gold' : 'border-dashed border-gold/40 text-gold hover:bg-gold/10'}`}>
+                      <Tag size={11} /> {o.code}
+                      <span className="font-normal text-gray-400">· {offerLabel(o)}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <Row label="Subtotal" value={inr(subtotal)} />
           {discount > 0 && <Row label="Discount" value={`-${inr(discount)}`} className="text-emerald-500" />}
           <Row label="Shipping" value={shipping ? inr(shipping) : 'Free'} />
+          {shipInfo?.is_first_order ? (
+            <p className="-mt-1 text-xs text-emerald-500">🎉 Free shipping on your first order</p>
+          ) : shipping > 0 ? (
+            <p className="-mt-1 text-xs text-gray-400">Add {inr(freeMin - (subtotal - discount))} more for free shipping</p>
+          ) : null}
           <div className="my-3 border-t border-black/5 dark:border-white/10" />
           <Row label="Total" value={inr(total)} bold />
 

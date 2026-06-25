@@ -21,12 +21,13 @@ class AdminCouponController
         }
         try {
             db()->prepare(
-                'INSERT INTO coupons (code, type, value, min_order, max_discount, usage_limit, expires_at, is_active)
-                 VALUES (?,?,?,?,?,?,?,?)'
+                'INSERT INTO coupons (code, type, value, min_order, max_discount, usage_limit, first_order_only, expires_at, is_active)
+                 VALUES (?,?,?,?,?,?,?,?,?)'
             )->execute([
                 strtoupper($data['code']), $data['type'], $data['value'],
-                $data['min_order'] ?? 0, $data['max_discount'] ?? null,
-                $data['usage_limit'] ?? null, $data['expires_at'] ?? null,
+                self::nn($data['min_order'] ?? null) ?? 0, self::nn($data['max_discount'] ?? null),
+                self::nn($data['usage_limit'] ?? null), !empty($data['first_order_only']) ? 1 : 0,
+                self::nn($data['expires_at'] ?? null),
                 isset($data['is_active']) ? (int) $data['is_active'] : 1,
             ]);
         } catch (PDOException $e) {
@@ -40,13 +41,20 @@ class AdminCouponController
         Auth::admin();
         $data = Request::body();
         db()->prepare(
-            'UPDATE coupons SET type=?, value=?, min_order=?, max_discount=?, usage_limit=?, expires_at=?, is_active=? WHERE id=?'
+            'UPDATE coupons SET type=?, value=?, min_order=?, max_discount=?, usage_limit=?, first_order_only=?, expires_at=?, is_active=? WHERE id=?'
         )->execute([
-            $data['type'], $data['value'], $data['min_order'] ?? 0, $data['max_discount'] ?? null,
-            $data['usage_limit'] ?? null, $data['expires_at'] ?? null,
+            $data['type'], $data['value'], self::nn($data['min_order'] ?? null) ?? 0, self::nn($data['max_discount'] ?? null),
+            self::nn($data['usage_limit'] ?? null), !empty($data['first_order_only']) ? 1 : 0,
+            self::nn($data['expires_at'] ?? null),
             isset($data['is_active']) ? (int) $data['is_active'] : 1, (int) $p['id'],
         ]);
         Response::success(null, 'Coupon updated');
+    }
+
+    /** Normalize empty strings to null (decimal/date columns reject ''). */
+    private static function nn($v)
+    {
+        return ($v === '' || $v === null) ? null : $v;
     }
 
     public function destroy(array $p): void

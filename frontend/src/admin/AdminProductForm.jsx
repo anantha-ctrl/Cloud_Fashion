@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Plus, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/client';
-import { Spinner } from '../components/ui';
+import { Spinner, Checkbox } from '../components/ui';
 
 const blank = {
   name: '', category_id: '', brand: '', description: '', price: '', mrp: '',
@@ -17,12 +17,13 @@ export default function AdminProductForm() {
   const [cats, setCats] = useState([]);
   const [form, setForm] = useState(blank);
   const [images, setImages] = useState([]); // {url}
+  const dragImg = useRef(null);
   const [variants, setVariants] = useState([]);
   const [specs, setSpecs] = useState([{ k: '', v: '' }]);
   const [loading, setLoading] = useState(editing);
 
   useEffect(() => {
-    api.get('/api/categories').then((r) => setCats(r.data.data));
+    api.get('/api/categories').then((r) => setCats(r.data.data)).catch(() => {});
     if (editing) {
       // Load product via admin list (kept simple); fetch single via public slug not available by id, so use list.
       api.get('/api/admin/products').then((r) => {
@@ -40,10 +41,12 @@ export default function AdminProductForm() {
             setImages((f.images || []).map((i) => ({ url: i.image_url })));
             setVariants((f.variants || []).map((v) => ({ size: v.size || '', color: v.color || '', color_hex: v.color_hex || '', stock: v.stock, price_diff: v.price_diff })));
             if (f.specifications) setSpecs(Object.entries(f.specifications).map(([k, v]) => ({ k, v })));
-          });
+          }).catch(() => {});
+        } else {
+          toast.error('Product not found');
         }
         setLoading(false);
-      });
+      }).catch(() => { setLoading(false); }); // 401/expired-token etc. — interceptor handles redirect
     }
   }, [id]);
 
@@ -110,11 +113,24 @@ export default function AdminProductForm() {
       {/* Images */}
       <div className="card space-y-3 p-6">
         <h3 className="font-semibold">Images</h3>
-        <p className="text-xs text-gray-400">Data-URI images are uploaded to Cloudinary when configured; otherwise stored as-is.</p>
+        <p className="text-xs text-gray-400">Drag to reorder — the first image is the primary. Data-URIs upload to Cloudinary when configured.</p>
         <div className="flex flex-wrap gap-3">
           {images.map((img, i) => (
-            <div key={i} className="relative h-24 w-20">
+            <div key={i} draggable
+              onDragStart={() => (dragImg.current = i)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => {
+                const from = dragImg.current;
+                if (from == null || from === i) return;
+                const next = [...images];
+                const [moved] = next.splice(from, 1);
+                next.splice(i, 0, moved);
+                setImages(next);
+                dragImg.current = null;
+              }}
+              className="relative h-24 w-20 cursor-grab active:cursor-grabbing">
               <img src={img.url} className="h-full w-full rounded-lg object-cover" alt="" />
+              {i === 0 && <span className="absolute bottom-0 left-0 right-0 rounded-b-lg bg-gold/90 py-0.5 text-center text-[9px] font-bold text-ink">PRIMARY</span>}
               <button type="button" onClick={() => setImages(images.filter((_, x) => x !== i))}
                 className="absolute -right-2 -top-2 rounded-full bg-rose-500 p-1 text-white"><X size={12} /></button>
             </div>
@@ -171,7 +187,7 @@ const upd = (setter, arr, i, k, val) => setter(arr.map((x, idx) => (idx === i ? 
 const Field = ({ label, children }) => (<div><label className="mb-1 block text-sm text-gray-400">{label}</label>{children}</div>);
 const Toggle = ({ label, v, on }) => (
   <label className="flex cursor-pointer items-center gap-2">
-    <input type="checkbox" checked={!!Number(v)} onChange={(e) => on(e.target.checked ? 1 : 0)} className="h-4 w-4 accent-[#c9a96a]" /> {label}
+    <Checkbox checked={!!Number(v)} onChange={(e) => on(e.target.checked ? 1 : 0)} /> {label}
   </label>
 );
 const Trash = () => <X size={16} />;

@@ -64,19 +64,27 @@ $router->post('/api/checkout/create-order', 'CheckoutController@createOrder');
 $router->post('/api/checkout/verify',       'CheckoutController@verify');
 
 // ---- Orders ----
+$router->get('/api/shipping-info',       'OrderController@shippingInfo');
 $router->get('/api/orders',              'OrderController@index');
 $router->get('/api/orders/{id}',         'OrderController@show');
 $router->post('/api/orders/cod',         'OrderController@placeCod');
 $router->put('/api/orders/{id}/cancel',  'OrderController@cancel');
+$router->post('/api/orders/{id}/reorder','OrderController@reorder');
 
 // ---- Misc ----
 $router->post('/api/newsletter',         'MiscController@newsletter');
 $router->post('/api/contact',            'MiscController@contact');
 $router->get('/api/recently-viewed',     'MiscController@recentlyViewed');
 $router->post('/api/recently-viewed',    'MiscController@trackView');
+$router->get('/api/offers',              'MiscController@offers');
+$router->get('/api/banners',             'MiscController@banners');
+$router->post('/api/notify-stock',       'MiscController@notifyStock');
 
 // ======================= ADMIN =======================
 $router->get('/api/admin/dashboard',          'AdminDashboardController@stats');
+$router->get('/api/admin/notifications',          'AdminDashboardController@notifications');
+$router->post('/api/admin/notifications/state',   'AdminDashboardController@setNotificationState');
+$router->post('/api/admin/notifications/read-all','AdminDashboardController@markAllRead');
 $router->get('/api/admin/reports/sales',      'AdminReportController@sales');
 $router->get('/api/admin/reports/products',   'AdminReportController@products');
 $router->get('/api/admin/reports/customers',  'AdminReportController@customers');
@@ -87,16 +95,25 @@ $router->delete('/api/admin/categories/{id}', 'AdminCategoryController@destroy')
 
 $router->get('/api/admin/products',           'AdminProductController@index');
 $router->post('/api/admin/products',          'AdminProductController@store');
+$router->post('/api/admin/products/bulk',     'AdminProductController@bulk');
+$router->post('/api/admin/products/import',   'AdminProductController@import');
 $router->put('/api/admin/products/{id}',      'AdminProductController@update');
 $router->delete('/api/admin/products/{id}',   'AdminProductController@destroy');
 $router->post('/api/admin/products/{id}/images', 'AdminProductController@uploadImages');
 $router->get('/api/admin/inventory/low-stock','AdminProductController@lowStock');
+$router->get('/api/admin/inventory',          'AdminProductController@inventory');
+$router->put('/api/admin/inventory/{id}',     'AdminProductController@updateStock');
 
 $router->get('/api/admin/orders',             'AdminOrderController@index');
 $router->put('/api/admin/orders/{id}/status', 'AdminOrderController@updateStatus');
 
 $router->get('/api/admin/customers',          'AdminCustomerController@index');
 $router->get('/api/admin/customers/{id}',     'AdminCustomerController@show');
+
+$router->get('/api/admin/banners',            'AdminBannerController@index');
+$router->post('/api/admin/banners',           'AdminBannerController@store');
+$router->put('/api/admin/banners/{id}',       'AdminBannerController@update');
+$router->delete('/api/admin/banners/{id}',    'AdminBannerController@destroy');
 
 $router->get('/api/admin/coupons',            'AdminCouponController@index');
 $router->post('/api/admin/coupons',           'AdminCouponController@store');

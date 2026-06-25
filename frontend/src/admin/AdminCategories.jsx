@@ -9,7 +9,7 @@ export default function AdminCategories() {
   const [form, setForm] = useState({ id: null, name: '', description: '', image_url: '', is_active: 1 });
   const [show, setShow] = useState(false);
 
-  const load = () => api.get('/api/categories').then((r) => setCats(r.data.data));
+  const load = () => api.get('/api/categories').then((r) => setCats(r.data.data)).catch(() => {});
   useEffect(() => { load(); }, []);
 
   const save = async (e) => {

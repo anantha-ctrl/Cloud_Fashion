@@ -7,6 +7,7 @@ import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
 import api from '../api/client';
 import { inr } from '../utils/format';
+import Logo from './Logo';
 
 const MEGA = {
   Men: ['Shirts', 'T-Shirts', 'Blazers', 'Trousers', 'Denim'],
@@ -86,13 +87,11 @@ export default function Navbar() {
         FREE SHIPPING OVER ₹1999 · EASY 7-DAY RETURNS · USE CODE WELCOME10
       </div>
       <nav className="glass border-b border-black/5 dark:border-white/10">
-        <div className="mx-auto flex max-w-7xl items-center gap-4 px-4 py-3">
-          <button className="lg:hidden" onClick={() => setOpenMenu(true)}><Menu /></button>
+        <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-3 sm:gap-4 sm:px-4">
+          <button className="-ml-1 p-1 lg:hidden" onClick={() => setOpenMenu(true)} aria-label="menu"><Menu /></button>
 
-          <Link to="/" className="flex items-center gap-2">
-            <span className="font-display text-2xl font-bold tracking-tight">
-              Cloud<span className="text-gold">Fashion</span>
-            </span>
+          <Link to="/" className="flex shrink-0 items-center gap-2">
+            <Logo className="h-9 sm:h-11" />
           </Link>
 
           {/* Desktop nav with mega menu */}
@@ -129,17 +128,22 @@ export default function Navbar() {
             {SuggestList}
           </form>
 
-          <div className="ml-auto flex items-center gap-3 md:ml-2">
+          <div className="ml-auto flex shrink-0 items-center gap-0.5 sm:gap-2 md:ml-2">
             <button onClick={toggle} className="rounded-full p-2 hover:bg-gold/10" aria-label="theme">
               {theme === 'dark' ? <Sun size={20} /> : <Moon size={20} />}
             </button>
-            <Link to="/wishlist" className="relative rounded-full p-2 hover:bg-gold/10">
+            <Link to="/wishlist" className="relative rounded-full p-2 hover:bg-gold/10" aria-label="wishlist">
               <Heart size={20} />
               {wishCount > 0 && <Badge>{wishCount}</Badge>}
             </Link>
-            <Link to="/cart" className="relative rounded-full p-2 hover:bg-gold/10">
+            <Link to="/cart" className="relative rounded-full p-2 hover:bg-gold/10" aria-label="cart">
               <ShoppingBag size={20} />
               {count > 0 && <Badge>{count}</Badge>}
+            </Link>
+
+            {/* Mobile: compact account icon (full menu lives in the hamburger drawer) */}
+            <Link to={user ? '/profile' : '/login'} className="rounded-full p-2 hover:bg-gold/10 lg:hidden" aria-label="account">
+              <User size={20} />
             </Link>
 
             {user ? (
@@ -161,7 +165,7 @@ export default function Navbar() {
                 </div>
               </div>
             ) : (
-              <Link to="/login" className="btn-gold !px-4 !py-2 text-sm">Login</Link>
+              <Link to="/login" className="hidden btn-gold !px-4 !py-2 text-sm lg:inline-flex">Login</Link>
             )}
           </div>
         </div>
@@ -173,7 +177,7 @@ export default function Navbar() {
           <div className="absolute inset-0 bg-black/50" onClick={() => setOpenMenu(false)} />
           <div className="absolute left-0 top-0 flex h-full w-[82%] max-w-xs flex-col overflow-y-auto bg-white p-6 dark:bg-ink">
             <div className="mb-5 flex items-center justify-between">
-              <span className="font-display text-xl font-bold">Cloud<span className="text-gold">Fashion</span></span>
+              <Logo className="h-9" />
               <button onClick={() => setOpenMenu(false)} aria-label="close menu"><X /></button>
             </div>
 

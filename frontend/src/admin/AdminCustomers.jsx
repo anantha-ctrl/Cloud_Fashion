@@ -7,8 +7,8 @@ export default function AdminCustomers() {
   const [customers, setCustomers] = useState(null);
   const [detail, setDetail] = useState(null);
 
-  useEffect(() => { api.get('/api/admin/customers').then((r) => setCustomers(r.data.data)); }, []);
-  const open = (id) => api.get(`/api/admin/customers/${id}`).then((r) => setDetail(r.data.data));
+  useEffect(() => { api.get('/api/admin/customers').then((r) => setCustomers(r.data.data)).catch(() => {}); }, []);
+  const open = (id) => api.get(`/api/admin/customers/${id}`).then((r) => setDetail(r.data.data)).catch(() => {});
 
   if (!customers) return <Spinner />;
 
@@ -16,7 +16,7 @@ export default function AdminCustomers() {
     <div className="space-y-6">
       <h1 className="font-display text-2xl font-bold">Customers</h1>
       <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
+        <table className="w-full min-w-[620px] text-sm">
           <thead className="text-left text-gray-400">
             <tr className="border-b border-black/5 dark:border-white/10">
               <th className="p-4">Name</th><th>Email</th><th>Orders</th><th>Spent</th><th>Joined</th>

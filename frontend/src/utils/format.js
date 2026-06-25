@@ -7,6 +7,16 @@ export const discountPct = (price, mrp) =>
 export const dateFmt = (d) =>
   new Date(d).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
 
+export const timeAgo = (d) => {
+  if (!d) return '';
+  const s = Math.floor((Date.now() - new Date(d.replace(' ', 'T')).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  if (s < 604800) return `${Math.floor(s / 86400)}d ago`;
+  return dateFmt(d);
+};
+
 export const statusColor = {
   pending: 'bg-amber-500/15 text-amber-500',
   processing: 'bg-blue-500/15 text-blue-500',

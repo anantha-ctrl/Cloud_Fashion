@@ -1,14 +1,17 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { Check, X, FileText } from 'lucide-react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { Check, X, FileText, Truck, RotateCcw } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/client';
 import { inr, dateFmt, statusColor } from '../utils/format';
 import { printInvoice } from '../utils/invoice';
 import { Spinner } from '../components/ui';
+import { useCart } from '../context/CartContext';
 
 export default function OrderDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { refresh: refreshCart } = useCart();
   const [order, setOrder] = useState(null);
 
   const load = () => api.get(`/api/orders/${id}`).then((r) => setOrder(r.data.data)).catch(() => {});
@@ -17,6 +20,15 @@ export default function OrderDetail() {
   const cancel = async () => {
     try { await api.put(`/api/orders/${id}/cancel`); toast.success('Order cancelled'); load(); }
     catch (e) { toast.error(e.message); }
+  };
+
+  const reorder = async () => {
+    try {
+      const { data } = await api.post(`/api/orders/${id}/reorder`);
+      toast.success(data.message);
+      await refreshCart();
+      if (data.data.added) navigate('/cart');
+    } catch (e) { toast.error(e.message); }
   };
 
   if (!order) return <Spinner className="min-h-[50vh]" />;
@@ -53,6 +65,20 @@ export default function OrderDetail() {
         </div>
       )}
 
+      {/* Shipment tracking */}
+      {order.tracking_number && (
+        <div className="card mt-4 flex flex-wrap items-center gap-3 p-5">
+          <span className="rounded-xl bg-gold/15 p-2.5 text-gold"><Truck size={20} /></span>
+          <div>
+            <p className="text-sm font-semibold">Shipment tracking</p>
+            <p className="text-sm text-gray-400">
+              {order.carrier ? `${order.carrier} · ` : ''}Tracking #
+              <span className="ml-1 font-mono font-semibold text-gold">{order.tracking_number}</span>
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="mt-6 grid gap-6 md:grid-cols-3">
         <div className="space-y-4 md:col-span-2">
           {order.items.map((it) => (
@@ -86,6 +112,9 @@ export default function OrderDetail() {
               <span className={`ml-1 rounded px-2 py-0.5 ${statusColor[order.payment_status]}`}>{order.payment_status}</span>
             </p>
           </div>
+          <button onClick={reorder} className="btn-gold w-full">
+            <RotateCcw size={16} /> Reorder
+          </button>
           {canCancel && (
             <button onClick={cancel} className="btn-outline w-full !border-rose-500/50 !text-rose-500">
               <X size={16} /> Cancel Order

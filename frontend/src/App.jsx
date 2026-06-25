@@ -2,6 +2,8 @@ import { lazy, Suspense } from 'react';
 import { Routes, Route, useLocation } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
+import MobileTabBar from './components/MobileTabBar';
+import WhatsAppButton from './components/WhatsAppButton';
 import ProtectedRoute from './components/ProtectedRoute';
 import { Spinner } from './components/ui';
 
@@ -38,6 +40,7 @@ const AdminCustomers = lazy(() => import('./admin/AdminCustomers'));
 const AdminCoupons = lazy(() => import('./admin/AdminCoupons'));
 const AdminInventory = lazy(() => import('./admin/AdminInventory'));
 const AdminReports = lazy(() => import('./admin/AdminReports'));
+const AdminBanners = lazy(() => import('./admin/AdminBanners'));
 
 export default function App() {
   const { pathname } = useLocation();
@@ -85,6 +88,7 @@ export default function App() {
             <Route path="orders" element={<AdminOrders />} />
             <Route path="customers" element={<AdminCustomers />} />
             <Route path="coupons" element={<AdminCoupons />} />
+            <Route path="banners" element={<AdminBanners />} />
             <Route path="inventory" element={<AdminInventory />} />
             <Route path="reports" element={<AdminReports />} />
           </Route>
@@ -94,6 +98,8 @@ export default function App() {
         </Suspense>
       </main>
       {!isAdmin && <Footer />}
+      {!isAdmin && <MobileTabBar />}
+      {!isAdmin && <WhatsAppButton />}
     </div>
   );
 }

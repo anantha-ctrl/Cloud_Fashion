@@ -9,7 +9,7 @@ class AdminCategoryController
         if ($v->fails()) {
             Response::error('Validation failed', 422, $v->errors());
         }
-        $slug = self::slugify($data['name']);
+        $slug = self::uniqueCategorySlug($data['name']);
         db()->prepare('INSERT INTO categories (name, slug, parent_id, image_url, description, is_active) VALUES (?,?,?,?,?,?)')
             ->execute([
                 $data['name'], $slug, $data['parent_id'] ?? null,
@@ -43,5 +43,20 @@ class AdminCategoryController
     {
         $slug = strtolower(trim(preg_replace('/[^a-z0-9]+/i', '-', $text), '-'));
         return $slug . '-' . substr(uniqid(), -4);
+    }
+
+    /** Clean, human-readable category slug; adds -2, -3… only on collision. */
+    public static function uniqueCategorySlug(string $name): string
+    {
+        $base = strtolower(trim(preg_replace('/[^a-z0-9]+/i', '-', $name), '-')) ?: 'category';
+        $slug = $base;
+        $check = db()->prepare('SELECT COUNT(*) FROM categories WHERE slug=?');
+        $n = 2;
+        $check->execute([$slug]);
+        while ((int) $check->fetchColumn() > 0) {
+            $slug = $base . '-' . $n++;
+            $check->execute([$slug]);
+        }
+        return $slug;
     }
 }

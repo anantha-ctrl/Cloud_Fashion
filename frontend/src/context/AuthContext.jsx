@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import api from '../api/client';
+import api, { isTokenExpired } from '../api/client';
 
 const AuthContext = createContext();
 export const useAuth = () => useContext(AuthContext);
@@ -19,9 +19,17 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const token = localStorage.getItem('cf_token');
     if (!token) { setLoading(false); return; }
+    // If the token is already expired, drop the session up front.
+    if (isTokenExpired()) { logout(); setLoading(false); return; }
     api.get('/api/auth/me')
       .then((res) => persist(token, res.data.data))
-      .catch(() => logout())
+      .catch((err) => {
+        // /me is the source of truth: a 401 means the server definitively
+        // rejected the token (expired or invalid) -> clear the session so the
+        // user lands on /login instead of looping on failed admin calls.
+        // Any other error (offline / 5xx) is transient -> keep the cached user.
+        if (err?.response?.status === 401) logout();
+      })
       .finally(() => setLoading(false));
 
     // A 401 anywhere in the app dispatches this event; reset auth state so

@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import Logo from '../../components/Logo';
 
 export default function AuthShell({ title, subtitle, children, footer }) {
   return (
@@ -8,14 +9,14 @@ export default function AuthShell({ title, subtitle, children, footer }) {
           className="h-full w-full object-cover" />
         <div className="absolute inset-0 bg-gradient-to-t from-ink/90 via-ink/30 to-transparent" />
         <div className="absolute bottom-12 left-12 text-white">
-          <Link to="/" className="font-display text-3xl font-bold">Cloud<span className="text-gold">Fashion</span></Link>
+          <Link to="/" className="inline-block"><Logo white className="h-16" /></Link>
           <p className="mt-3 max-w-sm text-gray-300">Premium fashion, curated for the modern wardrobe.</p>
         </div>
       </div>
       <div className="flex items-center justify-center px-6 py-12">
         <div className="w-full max-w-sm">
-          <Link to="/" className="mb-8 block text-center font-display text-2xl font-bold lg:hidden">
-            Cloud<span className="text-gold">Fashion</span>
+          <Link to="/" className="mb-8 flex justify-center lg:hidden">
+            <Logo className="h-12" />
           </Link>
           <h1 className="font-display text-3xl font-bold">{title}</h1>
           {subtitle && <p className="mt-2 text-gray-400">{subtitle}</p>}

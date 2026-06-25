@@ -1,4 +1,25 @@
+import { Check } from 'lucide-react';
+
 // Small reusable UI primitives.
+
+/** Themed checkbox — light border when unchecked, gold fill + white tick when checked.
+ *  Replaces the native black checkbox that renders poorly on dark backgrounds. */
+export const Checkbox = ({ checked, onChange, className = '' }) => (
+  <span className={`relative inline-flex h-4 w-4 shrink-0 ${className}`}>
+    <input
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      className="peer h-4 w-4 cursor-pointer appearance-none rounded border border-gray-300 bg-white transition checked:border-gold checked:bg-gold focus:outline-none focus:ring-2 focus:ring-gold/40 dark:border-white/25 dark:bg-white/5 dark:checked:bg-gold"
+    />
+    <Check
+      size={12}
+      strokeWidth={3.5}
+      className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-ink opacity-0 transition peer-checked:opacity-100"
+    />
+  </span>
+);
+
 export const Spinner = ({ className = '' }) => (
   <div className={`flex items-center justify-center py-16 ${className}`}>
     <div className="h-9 w-9 animate-spin rounded-full border-2 border-gold border-t-transparent" />

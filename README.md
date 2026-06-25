@@ -6,28 +6,69 @@ A complete, production-ready **single-vendor fashion e-commerce** web applicatio
 
 ---
 
+## 🏗️ System Architecture
+
+```mermaid
+flowchart TB
+    subgraph Client["🖥️ Browser — React (Vite + Tailwind)"]
+        UI["Storefront + Admin SPA<br/>Context API · React Router"]
+        LS[("localStorage<br/>cf_token · cart · wishlist")]
+        UI <--> LS
+    end
+
+    subgraph Server["⚙️ PHP 8 API — dependency-free front controller"]
+        Router["index.php Router + CORS"]
+        Auth["Auth / JWT (HS256)"]
+        Ctrl["Controllers<br/>Product · Cart · Order · Checkout · Admin/*"]
+        Mailer["Raw-socket SMTP Mailer"]
+        Router --> Auth --> Ctrl --> Mailer
+    end
+
+    DB[("🗄️ MySQL / MariaDB<br/>cloudfashion")]
+    Razorpay["💳 Razorpay"]
+    Cloudinary["🖼️ Cloudinary"]
+    Gmail["📧 Gmail SMTP"]
+
+    UI -- "HTTPS · Authorization: Bearer JWT" --> Router
+    Ctrl -- "PDO (prepared)" --> DB
+    Ctrl -- "create / verify order" --> Razorpay
+    Ctrl -- "image upload (optional)" --> Cloudinary
+    Mailer -- "STARTTLS · OTP + order emails" --> Gmail
+```
+
+---
+
 ## ✨ Features
 
 ### Customer
-- **Auth** — Register, Login, Logout, **Email OTP verification**, Forgot/Reset password (JWT-based)
-- **Home** — Hero slider, featured categories, new arrivals, trending, best sellers, promo banners
+- **Auth** — Register, Login, Logout, **real Email OTP verification** (live Gmail SMTP), Forgot/Reset password (JWT-based, **7-day sessions** that stay logged in until manual logout)
+- **Home** — Hero slider, featured categories, new arrivals, trending, best sellers, **admin-managed promo banners**, live **offers strip**
 - **Catalog** — Search, filter (category, brand, size, color, price), sort (price/popularity/newest/rating), pagination
-- **Product page** — Image gallery with **zoom**, specs, variants (size/color), stock, reviews & ratings, related products
-- **Wishlist**, **Cart** (variant-aware, live totals, free-shipping threshold)
-- **Checkout** — Address management, coupons, **Razorpay** online payment + **COD**
-- **Orders** — History, detail with status timeline, cancel & auto-restock
+- **Product page** — Image gallery with **zoom**, **Quick View** side drawer, specs, variants (size/color), **size-guide modal**, stock, reviews & ratings, related products, **share buttons**, **"notify me when back in stock"**
+- **Wishlist**, **Cart** (variant-aware, live totals)
+- **Checkout** — Address management, **live available-coupons chips** (tap to apply), **Razorpay** online payment + **COD**
+  - **Smart shipping** — first order ships **free**; repeat orders free above ₹1,999, else ₹79
+  - **First-order-only coupons** (e.g. `WELCOME10`) validated against order history
+  - Atomic order creation (DB transaction — no orphan orders on failure)
+- **Orders** — History, detail with status timeline, **shipment tracking** (carrier + tracking #), **Reorder** (re-adds items to cart), cancel & auto-restock
+- **Order emails** — Order-placed confirmation + status-update emails (processing/packed/shipped/delivered)
 - **Profile** — Edit details, change password, manage addresses
 - Recently viewed, newsletter, contact, About/Privacy/Terms pages
-- **Responsive** + **Dark/Light mode** + smooth Framer Motion animations
+- **Floating WhatsApp button**, **mobile bottom tab bar (PWA-style)**
+- **Responsive** + **Dark/Light mode** + smooth Framer Motion animations + **PWA manifest**
 
 ### Admin
-- **Dashboard** — Sales/orders/customers/products cards, 6-month revenue chart, order status chart, recent orders
-- **Products** — Full CRUD, multiple images (Cloudinary), variants, specifications
-- **Categories**, **Coupons** (percentage/fixed, min order, expiry, usage limit)
-- **Orders** — Filter by status, update lifecycle (pending → processing → packed → shipped → delivered / cancelled)
-- **Inventory** — Low-stock & out-of-stock alerts
+- **Dashboard** — 8 KPI cards (today's sales, pending orders, avg order value, new customers…), revenue chart, color-coded order-status chart, top products & recent customers widgets, manual **Refresh**
+  - **Revenue excludes cancelled orders** (only `paid` & non-cancelled count toward sales)
+- **Notifications** — Bell with live alerts, **mark read/unread**, **delete**, **mark-all-read**
+- **Products** — Full CRUD, multiple images (Cloudinary or inline base64), variants, specifications, **bulk CSV import** (auto-creates categories)
+- **Categories** (clean auto-slugs), **Coupons** (percentage/fixed, min order, expiry, usage limit, **first-order-only**, **edit** support)
+- **Banners** — CRUD for homepage hero/promo banners
+- **Orders** — Filter by status, update lifecycle (pending → processing → packed → shipped → delivered / cancelled), set **carrier + tracking number**, **"Save & notify"** emails the customer
+- **Inventory** — Low-stock & out-of-stock alerts, stock editing
 - **Customers** — List with spend, order history drill-down
-- **Reports** — Sales (daily chart), top products, top customers
+- **Reports** — Date-range filter + presets, 6 KPI cards, charts (daily revenue, orders by status, revenue by category, payment methods), CSV export, **Refresh** (all revenue excludes cancelled)
+- **Static/sticky sidebar**, brand logo across all pages
 
 ---
 
@@ -36,7 +77,8 @@ A complete, production-ready **single-vendor fashion e-commerce** web applicatio
 ```
 CloudFashion/
 ├── database/
-│   └── cloudfashion.sql          # Full schema + seed data
+│   ├── cloudfashion.sql          # Full schema + seed data
+│   └── migration_002…007.sql     # Incremental schema updates (see Migrations)
 ├── backend/                      # PHP API (front-controller, no Composer needed)
 │   ├── bootstrap.php             # Loads env, core, autoloader
 │   ├── index.php                 # Router + CORS
@@ -59,9 +101,93 @@ CloudFashion/
 
 ## 🗄️ Database Tables
 
+**Core schema** (`cloudfashion.sql`):
 `users`, `auth_tokens`, `categories`, `products`, `product_images`, `product_variants`,
 `addresses`, `wishlist`, `cart`, `coupons`, `orders`, `order_items`, `reviews`,
 `recently_viewed`, `newsletter`.
+
+**Added by migrations:**
+`banners`, `stock_notifications`, `notification_states`.
+
+### Entity-Relationship Diagram
+
+```mermaid
+erDiagram
+    users ||--o{ auth_tokens : has
+    users ||--o{ addresses : has
+    users ||--o{ orders : places
+    users ||--o{ wishlist : saves
+    users ||--o{ cart : holds
+    users ||--o{ reviews : writes
+    users ||--o{ recently_viewed : views
+
+    categories ||--o{ categories : "parent_id (self)"
+    categories ||--o{ products : groups
+
+    products ||--o{ product_images : has
+    products ||--o{ product_variants : has
+    products ||--o{ order_items : "sold as"
+    products ||--o{ wishlist : in
+    products ||--o{ cart : in
+    products ||--o{ reviews : receives
+
+    product_variants ||--o{ cart : "selected in"
+
+    orders ||--o{ order_items : contains
+    addresses ||--o{ orders : "ships to"
+    coupons ||..o{ orders : "applied to"
+
+    users {
+        bigint id PK
+        string email
+        string role "customer | admin"
+    }
+    products {
+        bigint id PK
+        bigint category_id FK
+        string slug
+        decimal price
+        int stock
+    }
+    orders {
+        bigint id PK
+        bigint user_id FK
+        bigint address_id FK
+        string status
+        string carrier
+        string tracking_number
+        string payment_status
+    }
+    order_items {
+        bigint id PK
+        bigint order_id FK
+        bigint product_id FK
+        int quantity
+        decimal price
+    }
+    coupons {
+        bigint id PK
+        string code
+        string type "percentage | fixed"
+        tinyint first_order_only
+    }
+```
+
+### Migrations (apply in order, after the base schema)
+
+| File | What it does |
+|------|--------------|
+| `migration_002.sql` | `banners` + `stock_notifications` tables |
+| `migration_003.sql` | `notification_states` (admin read/dismiss state for alerts) |
+| `migration_004.sql` | Widen `product_images` / `categories` / `banners` image columns to `MEDIUMTEXT` (inline base64 images) |
+| `migration_005.sql` | `coupons.first_order_only` flag; sets `WELCOME10` first-order-only |
+| `migration_006.sql` | `orders.carrier` + `orders.tracking_number` (shipment tracking) |
+| `migration_007.sql` | Widen `order_items.image_url` to `MEDIUMTEXT` |
+
+```bash
+# apply every migration in order (phpMyAdmin or CLI)
+for f in database/migration_*.sql; do mysql -u root -p cloudfashion < "$f"; done
+```
 
 ---
 
@@ -123,8 +249,12 @@ Edit `backend/.env`:
 |---|---|
 | `DB_*` | MySQL connection (default user `root`) |
 | `JWT_SECRET` | **Change this** — signs all auth tokens |
-| `MAIL_DRIVER` | `log` (writes OTPs to `backend/storage/mail.log`) or `smtp` |
-| `SMTP_*` | SMTP creds (e.g. Gmail app password) when `MAIL_DRIVER=smtp` |
+| `MAIL_DRIVER` | `smtp` sends **real email** (OTP + order emails); `log` writes to `backend/storage/mail.log` |
+| `SMTP_*` | SMTP creds — for Gmail use a 16-char **App Password** (not your account password) when `MAIL_DRIVER=smtp` |
+
+> **Email is live:** with `MAIL_DRIVER=smtp` and a Gmail App Password, OTP verification and
+> order confirmation / status-update emails are sent for real over STARTTLS (raw-socket mailer,
+> no PHPMailer dependency). Keep your App Password out of any public commit — rotate it if leaked.
 | `CLOUDINARY_*` | Image uploads (optional — falls back to provided URLs) |
 | `RAZORPAY_*` | Payment gateway (optional — falls back to **test mode** that simulates success) |
 
@@ -145,9 +275,97 @@ POST   /api/auth/register            POST   /api/auth/verify-otp
 POST   /api/auth/login               POST   /api/auth/forgot-password
 GET    /api/products?search=&sort=   GET    /api/products/{slug}
 GET    /api/categories               POST   /api/cart
+GET    /api/offers                   POST   /api/coupons/apply
+GET    /api/shipping-info            POST   /api/notify-stock
 POST   /api/checkout/create-order    POST   /api/checkout/verify
+POST   /api/orders/cod               POST   /api/orders/{id}/reorder
 GET    /api/orders                   PUT    /api/orders/{id}/cancel
-GET    /api/admin/dashboard          POST   /api/admin/products      (admin)
+
+# admin (Authorization: Bearer <admin jwt>)
+GET    /api/admin/dashboard          GET    /api/admin/notifications
+POST   /api/admin/notifications/state  POST /api/admin/notifications/read-all
+POST   /api/admin/products           POST   /api/admin/products/import   (bulk CSV)
+PUT    /api/admin/orders/{id}/status (carrier + tracking, emails customer)
+GET    /api/admin/reports/sales?from=&to=
+CRUD   /api/admin/banners            CRUD   /api/admin/coupons
+```
+
+---
+
+## 🔄 Key Flows
+
+### Order lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> pending: Order placed (COD / Razorpay paid)
+    pending --> processing: Admin confirms
+    processing --> packed: Items packed
+    packed --> shipped: Carrier + tracking # set → 📧 customer
+    shipped --> delivered: Delivery confirmed → 📧 customer
+    delivered --> [*]
+
+    pending --> cancelled: Cancelled
+    processing --> cancelled: Cancelled
+    packed --> cancelled: Cancelled
+    cancelled --> [*]: Stock auto-restocked · excluded from sales
+
+    note right of pending
+        Created atomically in a DB
+        transaction (no orphan orders)
+    end note
+```
+
+### Auth + OTP (registration)
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant FE as React App
+    participant API as PHP API
+    participant DB as MySQL
+    participant SMTP as Gmail SMTP
+
+    U->>FE: Register (name, email, password)
+    FE->>API: POST /api/auth/register
+    API->>DB: create user (unverified, bcrypt)
+    API->>SMTP: send OTP email (STARTTLS)
+    SMTP-->>U: 6-digit code 📧
+    U->>FE: Enter OTP
+    FE->>API: POST /api/auth/verify-otp
+    API->>DB: mark verified
+    API-->>FE: JWT (HS256, 7-day) → localStorage
+```
+
+### Checkout → Order
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant FE as React App
+    participant API as PHP API
+    participant RZP as Razorpay
+    participant SMTP as Gmail SMTP
+
+    U->>FE: Open checkout
+    FE->>API: GET /api/offers, /api/shipping-info
+    API-->>FE: coupons + shipping (free first order)
+    U->>FE: Pick address, apply coupon, choose payment
+
+    alt Cash on Delivery
+        FE->>API: POST /api/orders/cod
+        API->>API: persist order (transaction)
+    else Razorpay
+        FE->>API: POST /api/checkout/create-order
+        API->>RZP: create order
+        U->>RZP: pay
+        RZP-->>FE: payment id + signature
+        FE->>API: POST /api/checkout/verify
+        API->>API: verify signature → persist order
+    end
+
+    API->>SMTP: order-placed email 📧
+    API-->>FE: order_id → Order Success
 ```
 
 ---
@@ -159,6 +377,33 @@ GET    /api/admin/dashboard          POST   /api/admin/products      (admin)
 - **Security:** bcrypt password hashing, HS256 JWT, prepared statements (PDO), input validation, CORS, user-enumeration-safe password reset
 
 See **[DEPLOYMENT.md](DEPLOYMENT.md)** for production deployment.
+
+---
+
+## 🆕 What's New (post-launch updates)
+
+Everything added on top of the initial build, in one place:
+
+**Storefront**
+- Real **email OTP** via Gmail SMTP; **7-day login sessions** (no more frequent auto-logout)
+- **Quick View** drawer, **size-guide** modal, **share buttons**, **back-in-stock** notify
+- **Live offers strip** + checkout **coupon chips**; **first-order-only** coupons
+- **Smart shipping** — free first order, then free over ₹1,999 (else ₹79)
+- **Reorder** from order history; **shipment tracking** (carrier + tracking #)
+- **Order emails** (placed / processing / packed / shipped / delivered)
+- **WhatsApp** floating button, **mobile tab bar**, **PWA manifest**, brand logo everywhere
+
+**Admin**
+- **Notifications** with read/unread, delete, mark-all-read
+- **Bulk product CSV import** (auto-creates categories); clean category slugs
+- **Coupon edit**; **Banners** CRUD; themed checkboxes
+- **Enriched dashboard** (8 KPIs, widgets) and **reports** (date range, more charts, CSV export)
+- **Sales exclude cancelled orders**; order workflow emails the customer on status change
+
+**Reliability**
+- **Atomic order creation** (DB transaction — no orphan orders)
+- Image columns widened to `MEDIUMTEXT` for inline base64 images
+- Smarter 401 handling — only logs out on genuinely expired/invalid tokens
 
 ---
 

@@ -7,6 +7,7 @@ import ProductCard from '../components/ProductCard';
 import { SectionTitle, Skeleton } from '../components/ui';
 import Seo from '../components/Seo';
 import RecentlyViewed from '../components/RecentlyViewed';
+import OffersStrip from '../components/OffersStrip';
 
 const SLIDES = [
   { title: 'Summer Couture', subtitle: 'New Season Arrivals', cta: 'Shop Women', to: '/category/women',
@@ -19,15 +20,23 @@ const SLIDES = [
 
 export default function Home() {
   const [slide, setSlide] = useState(0);
+  const [slides, setSlides] = useState(SLIDES);
   const [cats, setCats] = useState([]);
   const [data, setData] = useState({ featured: null, trending: null, newArrivals: null, best: null });
 
   useEffect(() => {
-    const t = setInterval(() => setSlide((s) => (s + 1) % SLIDES.length), 5000);
+    const t = setInterval(() => setSlide((s) => (s + 1) % slides.length), 5000);
     return () => clearInterval(t);
-  }, []);
+  }, [slides.length]);
 
   useEffect(() => {
+    // Banners are admin-managed; fall back to defaults if none/none-active.
+    api.get('/api/banners').then((r) => {
+      const b = r.data.data;
+      if (b?.length) {
+        setSlides(b.map((x) => ({ title: x.title, subtitle: x.subtitle, cta: x.cta_label, to: x.cta_link || '/shop', img: x.image_url })));
+      }
+    }).catch(() => {});
     api.get('/api/categories').then((r) => setCats(r.data.data)).catch(() => {});
     const load = (key, url) => api.get(url).then((r) => setData((d) => ({ ...d, [key]: r.data.data }))).catch(() => {});
     load('featured', '/api/products/featured?limit=8');
@@ -44,22 +53,22 @@ export default function Home() {
         <AnimatePresence mode="wait">
           <motion.div key={slide} initial={{ opacity: 0, scale: 1.05 }} animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }} transition={{ duration: 0.8 }} className="absolute inset-0">
-            <img src={SLIDES[slide].img} alt="" className="h-full w-full object-cover" />
+            <img src={slides[slide].img} alt="" className="h-full w-full object-cover" />
             <div className="absolute inset-0 bg-gradient-to-r from-ink/80 via-ink/40 to-transparent" />
           </motion.div>
         </AnimatePresence>
         <div className="relative mx-auto flex h-full max-w-7xl items-center px-6">
           <motion.div key={`txt-${slide}`} initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} className="max-w-xl text-white">
             <p className="mb-3 flex items-center gap-2 text-sm uppercase tracking-[0.3em] text-gold">
-              <Sparkles size={16} /> {SLIDES[slide].subtitle}
+              <Sparkles size={16} /> {slides[slide].subtitle}
             </p>
-            <h1 className="font-display text-5xl font-bold leading-tight sm:text-7xl">{SLIDES[slide].title}</h1>
+            <h1 className="font-display text-5xl font-bold leading-tight sm:text-7xl">{slides[slide].title}</h1>
             <p className="mt-4 text-gray-300">Discover handpicked pieces designed to elevate every moment.</p>
-            <Link to={SLIDES[slide].to} className="btn-gold mt-8">{SLIDES[slide].cta} <ArrowRight size={18} /></Link>
+            <Link to={slides[slide].to} className="btn-gold mt-8">{slides[slide].cta} <ArrowRight size={18} /></Link>
           </motion.div>
         </div>
         <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 gap-2">
-          {SLIDES.map((_, i) => (
+          {slides.map((_, i) => (
             <button key={i} onClick={() => setSlide(i)}
               className={`h-1.5 rounded-full transition-all ${i === slide ? 'w-8 bg-gold' : 'w-3 bg-white/40'}`} />
           ))}
@@ -103,6 +112,8 @@ export default function Home() {
       </section>
 
       <Carousel title="New Arrivals" eyebrow="Just In" products={data.newArrivals} to="/shop?sort=newest" />
+
+      <OffersStrip />
 
       {/* PROMO BANNER */}
       <section className="mx-auto max-w-7xl px-4 py-8">

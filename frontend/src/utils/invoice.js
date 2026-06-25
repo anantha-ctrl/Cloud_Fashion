@@ -14,14 +14,15 @@ export function printInvoice(order) {
       <td class="right">${inr(it.line_total)}</td>
     </tr>`).join('');
 
+  const logoUrl = `${window.location.origin}/logo.png`;
+
   const html = `<!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Invoice ${order.order_number}</title>
 <style>
   * { font-family: 'Helvetica Neue', Arial, sans-serif; box-sizing: border-box; }
   body { margin: 0; padding: 40px; color: #1a1a1a; }
   .head { display: flex; justify-content: space-between; align-items: flex-start; border-bottom: 3px solid #c9a96a; padding-bottom: 18px; }
-  .brand { font-size: 26px; font-weight: 800; }
-  .brand span { color: #c9a96a; }
+  .brand { height: 56px; width: auto; object-fit: contain; }
   .muted { color: #888; font-size: 12px; }
   h2 { margin: 0 0 4px; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; color: #c9a96a; }
   .cols { display: flex; justify-content: space-between; gap: 30px; margin: 26px 0; font-size: 13px; }
@@ -38,8 +39,8 @@ export function printInvoice(order) {
 <body>
   <div class="head">
     <div>
-      <div class="brand">Cloud<span>Fashion</span></div>
-      <div class="muted">Premium fashion, curated for you.</div>
+      <img class="brand" src="${logoUrl}" alt="Cloud Fashion" />
+      <div class="muted" style="margin-top:6px">Premium fashion, curated for you.</div>
     </div>
     <div style="text-align:right">
       <div style="font-size:20px;font-weight:700">INVOICE</div>
