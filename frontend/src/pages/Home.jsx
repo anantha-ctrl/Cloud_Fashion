@@ -99,7 +99,9 @@ export default function Home() {
           {cats.map((c, i) => (
             <Link key={c.id} to={`/category/${c.slug}`}
               className="group relative aspect-[4/5] overflow-hidden rounded-2xl">
-              <img src={`https://images.unsplash.com/photo-${CAT_IMG[i % CAT_IMG.length]}?w=500`} alt={c.name}
+              {/* Use the admin-uploaded category image; fall back to a curated
+                  placeholder only when the category has no image set. */}
+              <img src={c.image_url || `https://images.unsplash.com/photo-${CAT_IMG[i % CAT_IMG.length]}?w=500`} alt={c.name}
                 className="h-full w-full object-cover transition duration-700 group-hover:scale-110" />
               <div className="absolute inset-0 bg-gradient-to-t from-ink/80 to-transparent" />
               <div className="absolute bottom-4 left-4 text-white">
@@ -122,7 +124,7 @@ export default function Home() {
             <p className="text-sm uppercase tracking-[0.3em] text-gold">Limited Offer</p>
             <h3 className="mt-2 font-display text-4xl font-bold">Up to 50% Off</h3>
             <p className="mt-2 text-gray-300">End of season sale on selected styles. Use code <b className="text-gold">FLAT500</b>.</p>
-            <Link to="/shop" className="btn-gold mt-6">Shop the Sale <ArrowRight size={18} /></Link>
+            <Link to="/shop?on_sale=1&sort=discount" className="btn-gold mt-6">Shop the Sale <ArrowRight size={18} /></Link>
           </div>
           <Sparkles className="absolute -right-6 -top-6 h-48 w-48 text-gold/10" />
         </div>

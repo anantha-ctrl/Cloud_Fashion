@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Check, Tag, CreditCard, Banknote } from 'lucide-react';
+import { Plus, Check, Tag, CreditCard, Banknote, Star } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/client';
 import { useCart } from '../context/CartContext';
@@ -24,12 +24,15 @@ export default function Checkout() {
   const [placing, setPlacing] = useState(false);
   const [offers, setOffers] = useState([]);
   const [shipInfo, setShipInfo] = useState(null);
+  const [loyalty, setLoyalty] = useState(null);
+  const [usePoints, setUsePoints] = useState(false);
 
   useEffect(() => {
     if (!cart.items.length) navigate('/cart');
     loadAddresses();
     api.get('/api/offers').then((r) => setOffers(r.data.data)).catch(() => {});
     api.get('/api/shipping-info').then((r) => setShipInfo(r.data.data)).catch(() => {});
+    api.get('/api/loyalty').then((r) => setLoyalty(r.data.data)).catch(() => {});
   }, []);
 
   const loadAddresses = async () => {
@@ -75,7 +78,22 @@ export default function Checkout() {
   const baseShip = shipInfo?.base_shipping ?? 79;
   // First order ships free; repeat orders are free only above the threshold.
   const shipping = shipInfo?.is_first_order ? 0 : (subtotal - discount >= freeMin ? 0 : baseShip);
-  const total = Math.max(0, subtotal - discount + shipping);
+
+  // Loyalty: each point is worth `pointValue` rupees. Redeem up to the user's
+  // balance or `redeem_cap_pct` of the post-coupon amount.
+  const pointValue = loyalty?.point_value ?? 1;
+  const redeemCapPct = (loyalty?.redeem_cap_pct ?? 50) / 100;
+  const maxRedeem = Math.min(
+    loyalty?.points || 0,
+    Math.floor(((subtotal - discount) * redeemCapPct) / pointValue),
+  );
+  const pointsToUse = usePoints ? maxRedeem : 0;
+  const redeemValue = Math.round(pointsToUse * pointValue * 100) / 100; // rupees off
+  const pointsEarned = Math.min(
+    Math.floor(subtotal * ((loyalty?.earn_rate_pct ?? 5) / 100)),
+    loyalty?.earn_cap ?? Infinity, // never exceed the per-order cap
+  );
+  const total = Math.max(0, subtotal - discount - redeemValue + shipping);
 
   const loadRazorpay = () =>
     new Promise((resolve) => {
@@ -91,7 +109,11 @@ export default function Checkout() {
     if (!selected) return toast.error('Please select a delivery address');
     setPlacing(true);
     try {
-      const payload = { address_id: selected, coupon_code: discount ? coupon : undefined };
+      const payload = {
+        address_id: selected,
+        coupon_code: discount ? coupon : undefined,
+        points_redeem: pointsToUse || undefined,
+      };
 
       if (method === 'cod') {
         const { data } = await api.post('/api/orders/cod', payload);
@@ -235,8 +257,21 @@ export default function Checkout() {
             </div>
           )}
 
+          {/* Loyalty points redemption */}
+          {loyalty?.points > 0 && maxRedeem > 0 && (
+            <label className="mb-2 flex cursor-pointer items-center justify-between rounded-xl border border-gold/30 bg-gold/5 px-3 py-2">
+              <span className="flex items-center gap-2 text-sm">
+                <Star size={14} className="fill-gold text-gold" />
+                Use {maxRedeem} points <span className="text-gray-400">(−{inr(Math.round(maxRedeem * pointValue * 100) / 100)})</span>
+              </span>
+              <input type="checkbox" checked={usePoints} onChange={(e) => setUsePoints(e.target.checked)}
+                className="h-4 w-4 accent-gold" />
+            </label>
+          )}
+
           <Row label="Subtotal" value={inr(subtotal)} />
           {discount > 0 && <Row label="Discount" value={`-${inr(discount)}`} className="text-emerald-500" />}
+          {pointsToUse > 0 && <Row label={`Points (${pointsToUse})`} value={`-${inr(redeemValue)}`} className="text-gold" />}
           <Row label="Shipping" value={shipping ? inr(shipping) : 'Free'} />
           {shipInfo?.is_first_order ? (
             <p className="-mt-1 text-xs text-emerald-500">🎉 Free shipping on your first order</p>
@@ -245,6 +280,12 @@ export default function Checkout() {
           ) : null}
           <div className="my-3 border-t border-black/5 dark:border-white/10" />
           <Row label="Total" value={inr(total)} bold />
+          {pointsEarned > 0 && (
+            <p className="mt-2 flex items-center gap-1.5 rounded-xl bg-gold/5 px-3 py-2 text-xs text-gold">
+              <Star size={13} className="fill-gold text-gold" />
+              You’ll earn <span className="font-semibold">{pointsEarned} points</span> on this order
+            </p>
+          )}
 
           <button onClick={placeOrder} disabled={placing} className="btn-gold mt-6 w-full">
             {placing ? 'Processing…' : method === 'cod' ? 'Place Order' : `Pay ${inr(total)}`}

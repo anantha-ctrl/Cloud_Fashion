@@ -15,7 +15,7 @@ require_once BASE_PATH . '/config/env.php';
 load_env(BASE_PATH . '/.env');
 
 // Core helpers
-foreach (['Response', 'Request', 'Jwt', 'Validator', 'Auth', 'Mailer', 'Cloudinary', 'Razorpay'] as $core) {
+foreach (['Response', 'Request', 'Jwt', 'Validator', 'Auth', 'Mailer', 'Cloudinary', 'Razorpay', 'Setting'] as $core) {
     require_once BASE_PATH . "/core/$core.php";
 }
 require_once BASE_PATH . '/config/database.php';

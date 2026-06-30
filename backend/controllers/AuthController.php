@@ -4,6 +4,88 @@
  */
 class AuthController
 {
+    /**
+     * POST /api/auth/google — sign in / sign up with a Google access token.
+     * The frontend obtains the token via Google Identity Services; here we
+     * validate it really belongs to OUR app, fetch the verified profile, then
+     * find-or-create the user and issue our own JWT.
+     */
+    public function googleLogin(array $p): void
+    {
+        $clientId = env('GOOGLE_CLIENT_ID');
+        if (!$clientId) {
+            Response::error('Google sign-in is not configured on the server.', 503);
+        }
+        $token = trim((string) (Request::body()['access_token'] ?? ''));
+        if ($token === '') {
+            Response::error('Missing Google token', 422);
+        }
+
+        // 1) Validate the token and confirm it was issued for THIS client.
+        $info = self::httpJson('https://oauth2.googleapis.com/tokeninfo?access_token=' . urlencode($token));
+        $aud = $info['aud'] ?? $info['azp'] ?? null;
+        if (!$info || $aud !== $clientId) {
+            Response::error('Invalid or mismatched Google token', 401);
+        }
+
+        // 2) Fetch the verified profile.
+        $profile = self::httpJson('https://www.googleapis.com/oauth2/v3/userinfo', $token);
+        $email = $profile['email'] ?? ($info['email'] ?? null);
+        if (!$email) {
+            Response::error('Google account did not return an email', 422);
+        }
+        $name    = $profile['name'] ?? explode('@', $email)[0];
+        $picture = $profile['picture'] ?? null;
+
+        // 3) Find or create the user (Google accounts are pre-verified).
+        $db = db();
+        $u = $db->prepare('SELECT * FROM users WHERE email=?');
+        $u->execute([$email]);
+        $user = $u->fetch();
+
+        if (!$user) {
+            $db->prepare('INSERT INTO users (name, email, password_hash, is_verified, avatar_url, referral_code) VALUES (?,?,?,?,?,?)')
+               ->execute([
+                   $name, $email,
+                   password_hash(bin2hex(random_bytes(16)), PASSWORD_BCRYPT), // unusable random password
+                   1, $picture, LoyaltyController::makeReferralCode($db),
+               ]);
+            $u->execute([$email]);
+            $user = $u->fetch();
+        } elseif ((int) $user['is_verified'] === 0) {
+            $db->prepare('UPDATE users SET is_verified=1 WHERE id=?')->execute([$user['id']]);
+            $user['is_verified'] = 1;
+        }
+
+        if (($user['status'] ?? '') === 'blocked') {
+            Response::error('Your account has been blocked', 403);
+        }
+
+        Response::success($this->authPayload($user), 'Signed in with Google');
+    }
+
+    /** GET JSON over HTTPS (optionally with a bearer token). Returns null on failure. */
+    private static function httpJson(string $url, ?string $bearer = null): ?array
+    {
+        $ch = curl_init($url);
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT        => 15,
+            CURLOPT_SSL_VERIFYPEER => true,
+        ]);
+        if ($bearer) {
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Authorization: Bearer ' . $bearer]);
+        }
+        $res  = curl_exec($ch);
+        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($code !== 200 || !$res) {
+            return null;
+        }
+        $json = json_decode($res, true);
+        return is_array($json) ? $json : null;
+    }
+
     public function register(array $p): void
     {
         $data = Request::body();
@@ -27,12 +109,26 @@ class AuthController
             $db->prepare('UPDATE users SET name=?, password_hash=? WHERE id=?')
                ->execute([$data['name'], password_hash($data['password'], PASSWORD_BCRYPT), $userId]);
         } else {
-            $stmt = $db->prepare('INSERT INTO users (name, email, phone, password_hash) VALUES (?,?,?,?)');
+            // Optional referral code: credit the new customer a signup bonus and
+            // remember who referred them (the referrer is rewarded on first order).
+            $referrerId = null;
+            if (!empty($data['referral_code'])) {
+                $ref = $db->prepare('SELECT id FROM users WHERE referral_code=?');
+                $ref->execute([strtoupper(trim($data['referral_code']))]);
+                $referrerId = $ref->fetchColumn() ?: null;
+            }
+
+            $stmt = $db->prepare('INSERT INTO users (name, email, phone, password_hash, referral_code, referred_by) VALUES (?,?,?,?,?,?)');
             $stmt->execute([
                 $data['name'], $data['email'], $data['phone'] ?? null,
                 password_hash($data['password'], PASSWORD_BCRYPT),
+                LoyaltyController::makeReferralCode($db), $referrerId ?: null,
             ]);
             $userId = (int) $db->lastInsertId();
+
+            if ($referrerId) {
+                LoyaltyController::award($db, $userId, LoyaltyController::config()['loyalty_signup_bonus'], 'signup', null, 'Welcome bonus (referral)');
+            }
         }
 
         $this->issueOtp($userId, $data['name'], $data['email']);
@@ -165,6 +261,10 @@ class AuthController
         if (!$user) {
             Response::error('User not found', 404);
         }
+        // Sliding session: hand back a fresh token so an active user's 7-day
+        // window keeps rolling forward — they're never silently logged out
+        // mid-use. The client swaps this in for the one it sent.
+        $user['token'] = Jwt::encode(['sub' => (int) $user['id'], 'role' => $user['role'], 'name' => $user['name']]);
         Response::success($user);
     }
 

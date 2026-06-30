@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { Check, X, FileText, Truck, RotateCcw } from 'lucide-react';
+import { Check, X, FileText, Truck, RotateCcw, Star, Undo2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/client';
 import { inr, dateFmt, statusColor } from '../utils/format';
@@ -82,14 +82,20 @@ export default function OrderDetail() {
       <div className="mt-6 grid gap-6 md:grid-cols-3">
         <div className="space-y-4 md:col-span-2">
           {order.items.map((it) => (
-            <div key={it.id} className="card flex gap-4 p-4">
-              <img src={it.image_url} className="h-24 w-20 rounded-xl object-cover" alt="" />
-              <div className="flex-1">
-                <p className="font-medium">{it.product_name}</p>
-                <p className="text-sm text-gray-400">{it.size && `Size ${it.size}`} {it.color && `· ${it.color}`}</p>
-                <p className="text-sm text-gray-400">Qty {it.quantity}</p>
+            <div key={it.id} className="card p-4">
+              <div className="flex gap-4">
+                <img src={it.image_url} className="h-24 w-20 rounded-xl object-cover" alt="" />
+                <div className="flex-1">
+                  <p className="font-medium">{it.product_name}</p>
+                  <p className="text-sm text-gray-400">{it.size && `Size ${it.size}`} {it.color && `· ${it.color}`}</p>
+                  <p className="text-sm text-gray-400">Qty {it.quantity}</p>
+                </div>
+                <span className="font-semibold">{inr(it.line_total)}</span>
               </div>
-              <span className="font-semibold">{inr(it.line_total)}</span>
+              {/* Reviews unlock once the order is delivered. */}
+              {order.status === 'delivered' && it.product_id && (
+                <ReviewBox item={it} onSaved={load} />
+              )}
             </div>
           ))}
         </div>
@@ -120,6 +126,7 @@ export default function OrderDetail() {
               <X size={16} /> Cancel Order
             </button>
           )}
+          {order.status === 'delivered' && <ReturnPanel order={order} onChange={load} />}
         </div>
       </div>
     </div>
@@ -131,3 +138,134 @@ const Row = ({ label, value, bold }) => (
     <span>{label}</span><span>{value}</span>
   </div>
 );
+
+const RETURN_LABEL = {
+  requested: ['Return requested', 'text-amber-500'],
+  approved: ['Return approved', 'text-sky-500'],
+  rejected: ['Return rejected', 'text-rose-500'],
+  refunded: ['Refunded', 'text-emerald-500'],
+};
+
+/** Return/refund panel for delivered orders. Shows the request's status, or a
+ *  form to raise one. Backed by POST /api/orders/{id}/return. */
+function ReturnPanel({ order, onChange }) {
+  const ret = order.return;
+  const [open, setOpen] = useState(false);
+  const [reason, setReason] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  if (ret) {
+    const [label, color] = RETURN_LABEL[ret.status] || [ret.status, 'text-gray-400'];
+    return (
+      <div className="card p-4 text-sm">
+        <div className="flex items-center gap-2 font-semibold">
+          <Undo2 size={16} /> <span className={color}>{label}</span>
+        </div>
+        <p className="mt-1 text-gray-400">Reason: {ret.reason}</p>
+        {ret.admin_note && <p className="mt-1 text-gray-400">Note: {ret.admin_note}</p>}
+      </div>
+    );
+  }
+
+  const submit = async () => {
+    if (!reason.trim()) return toast.error('Please add a reason');
+    setSaving(true);
+    try {
+      await api.post(`/api/orders/${order.id}/return`, { reason });
+      toast.success('Return requested');
+      setOpen(false);
+      onChange();
+    } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="btn-outline w-full">
+        <Undo2 size={16} /> Request Return
+      </button>
+    );
+  }
+
+  return (
+    <div className="card space-y-3 p-4">
+      <p className="text-sm font-semibold">Request a return</p>
+      <textarea rows={3} className="input text-sm" placeholder="Why are you returning this order?"
+        value={reason} onChange={(e) => setReason(e.target.value)} />
+      <div className="flex gap-2">
+        <button onClick={submit} disabled={saving} className="btn-gold !py-2 text-sm">
+          {saving ? 'Submitting…' : 'Submit'}
+        </button>
+        <button onClick={() => setOpen(false)} className="btn-outline !py-2 text-sm">Cancel</button>
+      </div>
+    </div>
+  );
+}
+
+/** Per-product review widget shown on delivered orders. Prefills the customer's
+ *  existing review and upserts via POST /api/products/{id}/reviews. */
+function ReviewBox({ item, onSaved }) {
+  const existing = item.my_review;
+  const [open, setOpen] = useState(false);
+  const [rating, setRating] = useState(existing?.rating || 0);
+  const [hover, setHover] = useState(0);
+  const [comment, setComment] = useState(existing?.comment || '');
+  const [saving, setSaving] = useState(false);
+
+  const submit = async () => {
+    if (!rating) return toast.error('Please pick a star rating');
+    setSaving(true);
+    try {
+      await api.post(`/api/products/${item.product_id}/reviews`, { rating, comment });
+      toast.success(existing ? 'Review updated' : 'Thanks for your review!');
+      setOpen(false);
+      onSaved();
+    } catch (e) { toast.error(e.message); }
+    finally { setSaving(false); }
+  };
+
+  const Stars = ({ value, onPick, onHover }) => (
+    <div className="flex gap-1">
+      {[1, 2, 3, 4, 5].map((n) => (
+        <button key={n} type="button"
+          onClick={onPick ? () => onPick(n) : undefined}
+          onMouseEnter={onHover ? () => onHover(n) : undefined}
+          onMouseLeave={onHover ? () => onHover(0) : undefined}
+          className={onPick ? 'cursor-pointer' : 'cursor-default'}>
+          <Star size={18} className={n <= value ? 'fill-gold text-gold' : 'text-gray-300 dark:text-gray-600'} />
+        </button>
+      ))}
+    </div>
+  );
+
+  if (!open) {
+    return (
+      <div className="mt-3 flex items-center justify-between border-t border-black/5 pt-3 dark:border-white/10">
+        {existing ? (
+          <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-300">
+            <Stars value={existing.rating} /> <span>Your review</span>
+          </div>
+        ) : (
+          <span className="text-sm text-gray-400">Delivered — share your experience</span>
+        )}
+        <button onClick={() => setOpen(true)} className="btn-outline !py-1.5 text-sm">
+          <Star size={14} /> {existing ? 'Edit review' : 'Write a review'}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 space-y-3 border-t border-black/5 pt-3 dark:border-white/10">
+      <Stars value={hover || rating} onPick={setRating} onHover={setHover} />
+      <textarea rows={3} className="input text-sm" placeholder="Tell others what you think (optional)"
+        value={comment} onChange={(e) => setComment(e.target.value)} />
+      <div className="flex gap-2">
+        <button onClick={submit} disabled={saving} className="btn-gold !py-2 text-sm">
+          {saving ? 'Saving…' : 'Submit review'}
+        </button>
+        <button onClick={() => setOpen(false)} className="btn-outline !py-2 text-sm">Cancel</button>
+      </div>
+    </div>
+  );
+}

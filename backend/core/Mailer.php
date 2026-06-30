@@ -6,11 +6,11 @@
  */
 class Mailer
 {
-    public static function send(string $to, string $subject, string $html): bool
+    public static function send(string $to, string $subject, string $html, ?string $replyTo = null): bool
     {
         $driver = env('MAIL_DRIVER', 'log');
         if ($driver === 'smtp') {
-            return self::smtp($to, $subject, $html);
+            return self::smtp($to, $subject, $html, $replyTo);
         }
         return self::log($to, $subject, $html);
     }
@@ -25,7 +25,7 @@ class Mailer
         return (bool) file_put_contents($dir . '/mail.log', $entry, FILE_APPEND);
     }
 
-    private static function smtp(string $to, string $subject, string $html): bool
+    private static function smtp(string $to, string $subject, string $html, ?string $replyTo = null): bool
     {
         $host = env('SMTP_HOST', 'smtp.gmail.com');
         $port = (int) env('SMTP_PORT', 587);
@@ -80,6 +80,9 @@ class Mailer
 
         $headers  = "From: $fromName <$from>\r\n";
         $headers .= "To: <$to>\r\n";
+        if ($replyTo && filter_var($replyTo, FILTER_VALIDATE_EMAIL)) {
+            $headers .= "Reply-To: <$replyTo>\r\n"; // replies go straight to the sender
+        }
         $headers .= "Subject: $subject\r\n";
         $headers .= "MIME-Version: 1.0\r\n";
         $headers .= "Content-Type: text/html; charset=UTF-8\r\n";
@@ -145,6 +148,21 @@ class Mailer
             <p>Hi $name,</p>
             <p>Your order <b style='color:#c9a96a'>$orderNumber</b> $line.</p>
             $track");
+    }
+
+    public static function returnStatusTemplate(string $name, string $orderNumber, string $status, ?string $note = null): string
+    {
+        $labels = [
+            'approved' => "has been <b style='color:#c9a96a'>approved</b>. Please ship the item back as instructed.",
+            'rejected' => "could not be approved.",
+            'refunded' => "has been <b style='color:#22c55e'>refunded</b> &#10003;. The amount reflects in 5&ndash;7 business days.",
+        ];
+        $line = $labels[$status] ?? "status was updated to <b>$status</b>.";
+        $noteHtml = $note ? "<p style='margin-top:14px;padding:12px 16px;background:#15151c;border-radius:10px;color:#ddd'>Note from our team: $note</p>" : '';
+        return self::shell("
+            <p>Hi $name,</p>
+            <p>Your return request for order <b style='color:#c9a96a'>$orderNumber</b> $line</p>
+            $noteHtml");
     }
 
     public static function resetTemplate(string $name, string $link): string

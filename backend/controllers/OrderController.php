@@ -29,11 +29,33 @@ class OrderController
         $items = $db->prepare('SELECT * FROM order_items WHERE order_id=?');
         $items->execute([$order['id']]);
         $order['items'] = $items->fetchAll();
+
+        // Attach this customer's existing review (if any) per product, so the UI
+        // can prefill the form / show a "reviewed" state. Reviews open only once
+        // the order is delivered.
+        $rev = $db->prepare('SELECT rating, title, comment FROM reviews WHERE product_id=? AND user_id=?');
+        foreach ($order['items'] as &$it) {
+            if (!empty($it['product_id'])) {
+                $rev->execute([(int) $it['product_id'], $userId]);
+                $r = $rev->fetch();
+                $it['my_review'] = $r ? ['rating' => (int) $r['rating'], 'title' => $r['title'], 'comment' => $r['comment']] : null;
+            } else {
+                $it['my_review'] = null;
+            }
+        }
+        unset($it);
+
         $order['shipping_address'] = json_decode($order['shipping_address'], true);
         foreach (['subtotal', 'discount', 'shipping_fee', 'total'] as $f) {
             $order[$f] = (float) $order[$f];
         }
         $order['timeline'] = $this->timeline($order['status']);
+
+        // Return/refund request for this order (if any).
+        $ret = $db->prepare('SELECT status, reason, admin_note, created_at FROM returns WHERE order_id=?');
+        $ret->execute([$order['id']]);
+        $order['return'] = $ret->fetch() ?: null;
+
         Response::success($order);
     }
 
@@ -61,9 +83,15 @@ class OrderController
             Response::error('Order can no longer be cancelled', 400);
         }
         $db->prepare("UPDATE orders SET status='cancelled' WHERE id=?")->execute([$order['id']]);
-        // Restock
+        self::restockOrder($db, (int) $order['id']);
+        Response::success(null, 'Order cancelled');
+    }
+
+    /** Return every item of an order to stock and decrement sold counts. */
+    public static function restockOrder(PDO $db, int $orderId): void
+    {
         $items = $db->prepare('SELECT product_id, variant_id, quantity FROM order_items WHERE order_id=?');
-        $items->execute([$order['id']]);
+        $items->execute([$orderId]);
         foreach ($items->fetchAll() as $it) {
             if ($it['variant_id']) {
                 $db->prepare('UPDATE product_variants SET stock=stock+? WHERE id=?')->execute([$it['quantity'], $it['variant_id']]);
@@ -73,13 +101,22 @@ class OrderController
                    ->execute([$it['quantity'], $it['quantity'], $it['product_id']]);
             }
         }
-        Response::success(null, 'Order cancelled');
     }
 
     // ================= shipping =================
 
-    const FREE_SHIPPING_MIN = 1999;
-    const BASE_SHIPPING = 79;
+    const FREE_SHIPPING_MIN = 1999; // default; overridable via store settings
+    const BASE_SHIPPING = 79;        // default; overridable via store settings
+
+    public static function freeShippingMin(): float
+    {
+        return (float) Setting::get('store_free_shipping_min', self::FREE_SHIPPING_MIN);
+    }
+
+    public static function baseShipping(): float
+    {
+        return (float) Setting::get('store_base_shipping', self::BASE_SHIPPING);
+    }
 
     /** True when the user has never placed a (non-cancelled) order. */
     public static function isFirstOrder(int $userId): bool
@@ -99,7 +136,7 @@ class OrderController
         if (self::isFirstOrder($userId)) {
             return 0.0;
         }
-        return $payable >= self::FREE_SHIPPING_MIN ? 0.0 : self::BASE_SHIPPING;
+        return $payable >= self::freeShippingMin() ? 0.0 : self::baseShipping();
     }
 
     /** Lightweight info for the checkout page to display the correct shipping. */
@@ -108,8 +145,8 @@ class OrderController
         $userId = Auth::id();
         Response::success([
             'is_first_order'    => self::isFirstOrder($userId),
-            'free_shipping_min' => self::FREE_SHIPPING_MIN,
-            'base_shipping'     => self::BASE_SHIPPING,
+            'free_shipping_min' => self::freeShippingMin(),
+            'base_shipping'     => self::baseShipping(),
         ]);
     }
 
@@ -179,18 +216,27 @@ class OrderController
         }
 
         $shipping = self::shippingFee($userId, $subtotal - $discount);
-        $total = round($subtotal - $discount + $shipping, 2);
+
+        // Loyalty redemption: points -> rupees at the configured point value.
+        $pointsRedeem = LoyaltyController::clampRedeem(
+            $userId, (int) ($body['points_redeem'] ?? 0), $subtotal - $discount
+        );
+        $pointsValue = LoyaltyController::redeemValue($pointsRedeem);
+
+        $total = round($subtotal - $discount - $pointsValue + $shipping, 2);
 
         return [
-            'order_number' => 'CF' . date('ymd') . strtoupper(substr(uniqid(), -6)),
-            'items'        => $items,
-            'subtotal'     => round($subtotal, 2),
-            'discount'     => $discount,
-            'shipping_fee' => $shipping,
-            'total'        => $total,
-            'coupon_code'  => $couponCode,
-            'address'      => $address,
-            'address_id'   => $body['address_id'] ?? null,
+            'order_number'  => 'CF' . date('ymd') . strtoupper(substr(uniqid(), -6)),
+            'items'         => $items,
+            'subtotal'      => round($subtotal, 2),
+            'discount'      => $discount,
+            'shipping_fee'  => $shipping,
+            'points_used'   => $pointsRedeem,
+            'points_earned' => LoyaltyController::pointsFor($subtotal),
+            'total'         => $total,
+            'coupon_code'   => $couponCode,
+            'address'       => $address,
+            'address_id'    => $body['address_id'] ?? null,
         ];
     }
 
@@ -203,11 +249,12 @@ class OrderController
             $db->prepare(
                 'INSERT INTO orders
                  (order_number, user_id, address_id, shipping_address, subtotal, discount, shipping_fee, total,
-                  coupon_code, payment_method, payment_status, razorpay_order_id, status)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
+                  points_used, points_earned, coupon_code, payment_method, payment_status, razorpay_order_id, status)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
             )->execute([
                 $d['order_number'], $userId, $d['address_id'] ?? null, json_encode($d['address']),
                 $d['subtotal'], $d['discount'], $d['shipping_fee'], $d['total'],
+                $d['points_used'] ?? 0, $d['points_earned'] ?? 0,
                 $d['coupon_code'], $method, $paymentStatus, $rzpOrderId, 'pending',
             ]);
             $orderId = (int) $db->lastInsertId();
@@ -251,6 +298,25 @@ class OrderController
             $db->prepare('UPDATE coupons SET used_count=used_count+1 WHERE code=?')->execute([$d['coupon_code']]);
         }
         $db->prepare('DELETE FROM cart WHERE user_id=?')->execute([$userId]);
+
+        // ---- Loyalty & referrals ----
+        // Redeem the points the customer applied, then credit points earned.
+        if (!empty($d['points_used'])) {
+            LoyaltyController::award($db, $userId, -(int) $d['points_used'], 'redeem', $orderId, 'Redeemed at checkout');
+        }
+        if (!empty($d['points_earned'])) {
+            LoyaltyController::award($db, $userId, (int) $d['points_earned'], 'earn', $orderId, 'Earned on order ' . $d['order_number']);
+        }
+        // Reward the referrer on this customer's FIRST order.
+        $orderCount = (int) $db->query("SELECT COUNT(*) FROM orders WHERE user_id=" . (int) $userId . " AND status<>'cancelled'")->fetchColumn();
+        if ($orderCount === 1) {
+            $rb = $db->prepare('SELECT referred_by FROM users WHERE id=?');
+            $rb->execute([$userId]);
+            $referrerId = (int) $rb->fetchColumn();
+            if ($referrerId) {
+                LoyaltyController::award($db, $referrerId, LoyaltyController::config()['loyalty_referral_bonus'], 'referral', $orderId, 'Friend placed their first order');
+            }
+        }
 
         // Send order-confirmation email (best effort; never breaks the flow).
         $u = $db->prepare('SELECT name, email FROM users WHERE id=?');

@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Tags, ShoppingCart, Users, Ticket, Boxes, BarChart3,
-  Image as ImageIcon, LogOut, Menu, X, Sun, Moon,
+  Image as ImageIcon, Star, Undo2, Gift, Mail, LogOut, Menu, X, Sun, Moon,
+  User, Settings, KeyRound, ChevronDown,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -14,10 +15,14 @@ const NAV = [
   ['/admin/products', Package, 'Products'],
   ['/admin/categories', Tags, 'Categories'],
   ['/admin/orders', ShoppingCart, 'Orders'],
+  ['/admin/returns', Undo2, 'Returns'],
   ['/admin/inventory', Boxes, 'Inventory'],
   ['/admin/customers', Users, 'Customers'],
   ['/admin/coupons', Ticket, 'Coupons'],
   ['/admin/banners', ImageIcon, 'Banners'],
+  ['/admin/reviews', Star, 'Reviews'],
+  ['/admin/loyalty', Gift, 'Loyalty'],
+  ['/admin/messages', Mail, 'Messages'],
   ['/admin/reports', BarChart3, 'Reports'],
 ];
 
@@ -26,8 +31,23 @@ export default function AdminLayout() {
   const { theme, toggle } = useTheme();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
 
   const handleLogout = () => { logout(); navigate('/'); };
+
+  // Close the account dropdown when clicking outside it.
+  useEffect(() => {
+    const onClick = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+
+  const ACCOUNT_LINKS = [
+    ['/profile?tab=profile', User, 'Profile'],
+    ['/admin/settings', Settings, 'Settings'],
+    ['/profile?tab=password', KeyRound, 'Change Password'],
+  ];
 
   const Sidebar = (
     <div className="flex h-full flex-col">
@@ -83,11 +103,34 @@ export default function AdminLayout() {
             <button onClick={toggle} className="rounded-full p-2 hover:bg-gold/10" aria-label="theme">
               {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             </button>
-            <div className="flex items-center gap-2 pl-1">
-              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gold font-bold text-ink">
-                {user?.name?.[0]}
-              </div>
-              <span className="hidden text-sm font-medium sm:block">{user?.name}</span>
+            <div className="relative pl-1" ref={menuRef}>
+              <button onClick={() => setMenuOpen((o) => !o)}
+                className="flex items-center gap-2 rounded-full py-1 pl-1 pr-2 transition hover:bg-gold/10">
+                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gold font-bold text-ink">
+                  {user?.name?.[0]}
+                </div>
+                <span className="hidden text-sm font-medium sm:block">{user?.name}</span>
+                <ChevronDown size={16} className={`hidden text-gray-400 transition sm:block ${menuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {menuOpen && (
+                <div className="card absolute right-0 top-full mt-2 w-52 overflow-hidden p-1.5 text-sm shadow-xl">
+                  <div className="border-b border-black/5 px-3 py-2 dark:border-white/10">
+                    <p className="font-semibold">{user?.name}</p>
+                    <p className="truncate text-xs text-gray-400">{user?.email}</p>
+                  </div>
+                  {ACCOUNT_LINKS.map(([to, Icon, label]) => (
+                    <Link key={label} to={to} onClick={() => setMenuOpen(false)}
+                      className="mt-0.5 flex items-center gap-2.5 rounded-lg px-3 py-2 transition hover:bg-gold/10">
+                      <Icon size={16} className="text-gray-400" /> {label}
+                    </Link>
+                  ))}
+                  <button onClick={() => { setMenuOpen(false); handleLogout(); }}
+                    className="mt-0.5 flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-rose-500 transition hover:bg-rose-500/10">
+                    <LogOut size={16} /> Logout
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </header>

@@ -2,11 +2,11 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  color-scheme: dark light;
-}
-
-html { scroll-behavior: smooth; }
+/* Bind the browser's native form-control rendering (autofill text colour,
+   caret, scrollbars) to the ACTIVE theme. A static `dark light` here made
+   Chrome paint input text light even on the light auth panel -> invisible. */
+html { color-scheme: light; scroll-behavior: smooth; }
+html.dark { color-scheme: dark; }
 
 body {
   @apply bg-white text-ink dark:bg-ink dark:text-gray-100 font-sans antialiased;
@@ -27,11 +27,23 @@ body {
   }
   .input {
     @apply w-full rounded-xl border border-black/10 dark:border-white/10 bg-white/60 dark:bg-white/5 px-4 py-3
+           text-ink dark:text-gray-100 placeholder:text-gray-400
            outline-none transition focus:border-gold focus:ring-2 focus:ring-gold/30;
   }
   .card {
     @apply glass rounded-2xl shadow-glass;
   }
+}
+
+/* Keep browser autofill from painting that washed-out blue/grey box —
+   preserve the field's own (glass) background and theme text colour. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active {
+  -webkit-text-fill-color: inherit;
+  caret-color: inherit;
+  transition: background-color 9999s ease-in-out 0s;
 }
 
 /* Custom scrollbar */

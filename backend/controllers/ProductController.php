@@ -1,6 +1,57 @@
 <?php
 class ProductController
 {
+    /**
+     * GET /api/products/filters — available filter facets for the storefront
+     * sidebar, derived from real data (optionally scoped to a category/search):
+     * distinct sizes, distinct colors (+ a representative hex), and price range.
+     */
+    public function filters(array $p): void
+    {
+        $db = db();
+        $where = ['p.is_active = 1'];
+        $args = [];
+        if ($cat = Request::query('category')) {
+            $where[] = 'c.slug = ?';
+            $args[] = $cat;
+        }
+        if ($q = Request::query('search')) {
+            $where[] = '(p.name LIKE ? OR p.brand LIKE ? OR p.description LIKE ?)';
+            $like = "%$q%";
+            array_push($args, $like, $like, $like);
+        }
+        $whereSql = implode(' AND ', $where);
+        $base = "FROM products p JOIN categories c ON c.id = p.category_id";
+        $vbase = "FROM product_variants pv
+                  JOIN products p ON p.id = pv.product_id
+                  JOIN categories c ON c.id = p.category_id";
+
+        $priceStmt = $db->prepare("SELECT MIN(p.price) mn, MAX(p.price) mx $base WHERE $whereSql");
+        $priceStmt->execute($args);
+        $price = $priceStmt->fetch() ?: ['mn' => 0, 'mx' => 0];
+
+        $sizeStmt = $db->prepare("SELECT DISTINCT pv.size $vbase
+                                  WHERE $whereSql AND pv.size IS NOT NULL AND pv.size <> ''
+                                  ORDER BY LENGTH(pv.size), pv.size");
+        $sizeStmt->execute($args);
+        $sizes = $sizeStmt->fetchAll(PDO::FETCH_COLUMN);
+
+        $colorStmt = $db->prepare("SELECT pv.color, MAX(pv.color_hex) hex $vbase
+                                   WHERE $whereSql AND pv.color IS NOT NULL AND pv.color <> ''
+                                   GROUP BY pv.color ORDER BY pv.color");
+        $colorStmt->execute($args);
+        $colors = array_map(
+            fn ($c) => ['name' => $c['color'], 'hex' => $c['hex'] ?: null],
+            $colorStmt->fetchAll()
+        );
+
+        Response::success([
+            'sizes'  => $sizes,
+            'colors' => $colors,
+            'price'  => ['min' => (float) ($price['mn'] ?? 0), 'max' => (float) ($price['mx'] ?? 0)],
+        ]);
+    }
+
     /** Product listing with search, filters, sort, pagination. */
     public function index(array $p): void
     {
@@ -30,9 +81,15 @@ class ProductController
             $where[] = 'p.price <= ?';
             $args[] = (float) $max;
         }
+        // On-sale filter: only products actually discounted (selling below MRP).
+        if (Request::query('on_sale')) {
+            $where[] = 'p.mrp > 0 AND p.price < p.mrp';
+        }
         // Size / color filter via variants
         $joinVar = '';
-        if (($size = Request::query('size')) || ($color = Request::query('color'))) {
+        $size  = Request::query('size');
+        $color = Request::query('color');
+        if ($size || $color) {
             $joinVar = 'JOIN product_variants pv ON pv.product_id = p.id';
             if ($size) {
                 $sizes = explode(',', $size);
@@ -52,6 +109,8 @@ class ProductController
             'popularity' => 'p.sold_count DESC',
             'rating'     => 'p.rating_avg DESC',
             'newest'     => 'p.created_at DESC',
+            // Biggest discount first (guard against mrp=0 to avoid div-by-zero).
+            'discount'   => 'CASE WHEN p.mrp > 0 THEN (p.mrp - p.price) / p.mrp ELSE 0 END DESC',
         ];
         $order = $sortMap[Request::query('sort', 'newest')] ?? 'p.created_at DESC';
 
@@ -130,6 +189,46 @@ class ProductController
         );
         $rel->execute([$base['category_id'], $base['id']]);
         Response::success(array_map([$this, 'castProduct'], $rel->fetchAll()));
+    }
+
+    /** GET /api/products/{slug}/frequently-bought — co-purchased products,
+     *  falling back to same-category top sellers when there's no order history. */
+    public function frequentlyBought(array $p): void
+    {
+        $db = db();
+        $stmt = $db->prepare('SELECT id, category_id FROM products WHERE slug=?');
+        $stmt->execute([$p['slug']]);
+        $base = $stmt->fetch();
+        if (!$base) {
+            Response::success([]);
+        }
+        $pid = (int) $base['id'];
+
+        // Products bought in the same orders as this one.
+        $co = $db->prepare(
+            "SELECT p.*, (SELECT image_url FROM product_images WHERE product_id=p.id ORDER BY is_primary DESC LIMIT 1) AS image,
+                    COUNT(*) AS bought_together
+             FROM order_items oi1
+             JOIN order_items oi2 ON oi2.order_id = oi1.order_id AND oi2.product_id <> oi1.product_id
+             JOIN products p ON p.id = oi2.product_id AND p.is_active = 1
+             WHERE oi1.product_id = ?
+             GROUP BY p.id ORDER BY bought_together DESC, p.sold_count DESC LIMIT 4"
+        );
+        $co->execute([$pid]);
+        $rows = $co->fetchAll();
+
+        // Fallback: same-category best sellers when there's no co-purchase data.
+        if (!$rows) {
+            $fb = $db->prepare(
+                "SELECT p.*, (SELECT image_url FROM product_images WHERE product_id=p.id ORDER BY is_primary DESC LIMIT 1) AS image
+                 FROM products p WHERE p.category_id=? AND p.id<>? AND p.is_active=1
+                 ORDER BY p.sold_count DESC LIMIT 4"
+            );
+            $fb->execute([(int) $base['category_id'], $pid]);
+            $rows = $fb->fetchAll();
+        }
+
+        Response::success(array_map([$this, 'castProduct'], $rows));
     }
 
     public function featured(array $p): void   { $this->collection('is_featured=1'); }

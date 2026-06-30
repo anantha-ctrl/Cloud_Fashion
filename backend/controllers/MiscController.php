@@ -22,12 +22,45 @@ class MiscController
         if ($v->fails()) {
             Response::error('Validation failed', 422, $v->errors());
         }
+
+        $name    = trim($data['name']);
+        $email   = trim($data['email']);
+        $subject = trim($data['subject'] ?? '') ?: 'New message';
+        $message = trim($data['message']);
+
+        // 1) Persist so the team never loses a message (visible in Admin → Messages).
+        db()->prepare('INSERT INTO contact_messages (name, email, subject, message) VALUES (?,?,?,?)')
+            ->execute([$name, $email, $subject, $message]);
+
+        // 2) Notify the store inbox. Reply-To = customer so a reply reaches them.
+        $inbox = Setting::get('store_contact_to') ?: env('MAIL_FROM', 'support@cloudfashion.com');
+        $e = fn($s) => htmlspecialchars($s, ENT_QUOTES, 'UTF-8');
         Mailer::send(
-            env('MAIL_FROM', 'support@cloudfashion.com'),
-            'Contact form: ' . ($data['subject'] ?? 'New message'),
-            "<p><b>{$data['name']}</b> ({$data['email']})</p><p>{$data['message']}</p>"
+            $inbox,
+            'Contact form: ' . $subject,
+            "<p><b>{$e($name)}</b> &lt;{$e($email)}&gt;</p>"
+              . '<p><b>Subject:</b> ' . $e($subject) . '</p>'
+              . '<p>' . nl2br($e($message)) . '</p>',
+            $email
         );
         Response::success(null, 'Message sent. We will get back to you soon.');
+    }
+
+    /** GET /api/store-info — public store config (contact, announcement, socials…). */
+    public function storeInfo(array $p): void
+    {
+        Response::success([
+            'name'              => Setting::get('store_name', 'Cloud Fashion'),
+            'email'             => Setting::get('store_contact_email', 'support@cloudfashion.com'),
+            'phone'             => Setting::get('store_contact_phone', '+91 98765 43210'),
+            'address'           => Setting::get('store_address', 'Bengaluru, India'),
+            'announcement'      => Setting::get('store_announcement', ''),
+            'free_shipping_min' => (int) Setting::get('store_free_shipping_min', 1999),
+            'instagram'         => Setting::get('store_instagram', ''),
+            'facebook'          => Setting::get('store_facebook', ''),
+            'twitter'           => Setting::get('store_twitter', ''),
+            'whatsapp'          => Setting::get('store_whatsapp', ''),
+        ]);
     }
 
     /** Public list of active, non-expired coupons (for the offers banner). */

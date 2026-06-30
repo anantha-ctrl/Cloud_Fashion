@@ -12,6 +12,7 @@ $router->post('/api/auth/register',        'AuthController@register');
 $router->post('/api/auth/verify-otp',      'AuthController@verifyOtp');
 $router->post('/api/auth/resend-otp',      'AuthController@resendOtp');
 $router->post('/api/auth/login',           'AuthController@login');
+$router->post('/api/auth/google',          'AuthController@googleLogin');
 $router->post('/api/auth/logout',          'AuthController@logout');
 $router->post('/api/auth/forgot-password', 'AuthController@forgotPassword');
 $router->post('/api/auth/reset-password',  'AuthController@resetPassword');
@@ -31,8 +32,10 @@ $router->get('/api/products/featured',        'ProductController@featured');
 $router->get('/api/products/trending',        'ProductController@trending');
 $router->get('/api/products/new-arrivals',    'ProductController@newArrivals');
 $router->get('/api/products/best-sellers',    'ProductController@bestSellers');
+$router->get('/api/products/filters',         'ProductController@filters');
 $router->get('/api/products/{slug}',          'ProductController@show');
 $router->get('/api/products/{slug}/related',  'ProductController@related');
+$router->get('/api/products/{slug}/frequently-bought', 'ProductController@frequentlyBought');
 
 // ---- Reviews ----
 $router->get('/api/products/{id}/reviews', 'ReviewController@index');
@@ -70,10 +73,13 @@ $router->get('/api/orders/{id}',         'OrderController@show');
 $router->post('/api/orders/cod',         'OrderController@placeCod');
 $router->put('/api/orders/{id}/cancel',  'OrderController@cancel');
 $router->post('/api/orders/{id}/reorder','OrderController@reorder');
+$router->post('/api/orders/{id}/return', 'ReturnController@request');
+$router->get('/api/loyalty',             'LoyaltyController@index');
 
 // ---- Misc ----
 $router->post('/api/newsletter',         'MiscController@newsletter');
 $router->post('/api/contact',            'MiscController@contact');
+$router->get('/api/store-info',          'MiscController@storeInfo');
 $router->get('/api/recently-viewed',     'MiscController@recentlyViewed');
 $router->post('/api/recently-viewed',    'MiscController@trackView');
 $router->get('/api/offers',              'MiscController@offers');
@@ -119,3 +125,22 @@ $router->get('/api/admin/coupons',            'AdminCouponController@index');
 $router->post('/api/admin/coupons',           'AdminCouponController@store');
 $router->put('/api/admin/coupons/{id}',       'AdminCouponController@update');
 $router->delete('/api/admin/coupons/{id}',    'AdminCouponController@destroy');
+
+$router->get('/api/admin/reviews',            'AdminReviewController@index');
+$router->put('/api/admin/reviews/{id}',       'AdminReviewController@update');
+$router->delete('/api/admin/reviews/{id}',    'AdminReviewController@destroy');
+
+$router->get('/api/admin/returns',            'AdminReturnController@index');
+$router->put('/api/admin/returns/{id}',       'AdminReturnController@update');
+
+$router->get('/api/admin/loyalty',             'AdminLoyaltyController@index');
+$router->put('/api/admin/loyalty/settings',    'AdminLoyaltyController@saveSettings');
+$router->get('/api/admin/loyalty/{id}',        'AdminLoyaltyController@show');
+$router->post('/api/admin/loyalty/{id}/adjust','AdminLoyaltyController@adjust');
+
+$router->get('/api/admin/messages',           'AdminContactController@index');
+$router->put('/api/admin/messages/{id}',      'AdminContactController@update');
+$router->delete('/api/admin/messages/{id}',   'AdminContactController@destroy');
+
+$router->get('/api/admin/settings',           'AdminSettingsController@index');
+$router->put('/api/admin/settings',           'AdminSettingsController@update');

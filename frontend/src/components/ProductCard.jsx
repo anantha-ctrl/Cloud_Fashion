@@ -1,15 +1,17 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, Star, ShoppingBag, Eye } from 'lucide-react';
+import { Heart, Star, ShoppingBag, Eye, Scale } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { inr, discountPct } from '../utils/format';
 import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
+import { useCompare } from '../context/CompareContext';
 import QuickViewModal from './QuickViewModal';
 
 export default function ProductCard({ product }) {
   const { has, toggle } = useWishlist();
   const { add } = useCart();
+  const compare = useCompare();
   const [quickView, setQuickView] = useState(false);
   const pct = product.discount_pct ?? discountPct(product.price, product.mrp);
   const wished = has(product.id);
@@ -30,11 +32,16 @@ export default function ProductCard({ product }) {
             className="h-full w-full object-cover transition duration-700 group-hover:scale-110"
           />
         </Link>
-        {pct > 0 && (
-          <span className="absolute left-3 top-3 rounded-full bg-gold px-2.5 py-1 text-xs font-bold text-ink">
-            -{pct}%
-          </span>
-        )}
+        <div className="absolute left-3 top-3 flex flex-col items-start gap-1.5">
+          {pct > 0 && (
+            <span className="rounded-full bg-gold px-2.5 py-1 text-xs font-bold text-ink">-{pct}%</span>
+          )}
+          {Number(product.is_trending) === 1 ? (
+            <span className="rounded-full bg-rose-500 px-2.5 py-1 text-xs font-bold text-white">🔥 Trending</span>
+          ) : Number(product.sold_count) >= 100 ? (
+            <span className="rounded-full bg-ink/85 px-2.5 py-1 text-xs font-bold text-gold backdrop-blur">⭐ Best Seller</span>
+          ) : null}
+        </div>
         <div className="absolute right-3 top-3 flex flex-col gap-2">
           <button
             onClick={() => toggle(product)}
@@ -49,6 +56,13 @@ export default function ProductCard({ product }) {
             aria-label="quick view"
           >
             <Eye size={18} />
+          </button>
+          <button
+            onClick={() => compare.toggle(product.slug)}
+            className={`rounded-full p-2 backdrop-blur transition hover:scale-110 ${compare.has(product.slug) ? 'bg-gold text-ink' : 'bg-white/80 opacity-0 group-hover:opacity-100 dark:bg-black/40'}`}
+            aria-label="compare" title="Compare"
+          >
+            <Scale size={18} />
           </button>
         </div>
         <button
@@ -72,6 +86,9 @@ export default function ProductCard({ product }) {
           {Number(product.rating_avg) > 0 && (
             <span className="ml-auto flex items-center gap-1 text-xs text-amber-500">
               <Star size={13} className="fill-amber-500" /> {Number(product.rating_avg).toFixed(1)}
+              {Number(product.rating_count) > 0 && (
+                <span className="text-gray-400">({product.rating_count})</span>
+              )}
             </span>
           )}
         </div>

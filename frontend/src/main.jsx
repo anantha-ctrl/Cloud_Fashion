@@ -8,6 +8,8 @@ import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider } from './context/AuthContext';
 import { CartProvider } from './context/CartContext';
 import { WishlistProvider } from './context/WishlistContext';
+import { CompareProvider } from './context/CompareContext';
+import { StoreProvider } from './context/StoreContext';
 import './index.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
@@ -18,13 +20,17 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         <AuthProvider>
           <WishlistProvider>
             <CartProvider>
-              <App />
-              <Toaster
-                position="top-center"
-                toastOptions={{
-                  style: { background: '#15151c', color: '#fff', border: '1px solid #c9a96a44' },
-                }}
-              />
+              <CompareProvider>
+                <StoreProvider>
+                <App />
+                </StoreProvider>
+                <Toaster
+                  position="top-center"
+                  toastOptions={{
+                    style: { background: '#15151c', color: '#fff', border: '1px solid #c9a96a44' },
+                  }}
+                />
+              </CompareProvider>
             </CartProvider>
           </WishlistProvider>
         </AuthProvider>

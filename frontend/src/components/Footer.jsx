@@ -3,10 +3,19 @@ import { Link } from 'react-router-dom';
 import { Instagram, Facebook, Twitter, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/client';
+import { useStore } from '../context/StoreContext';
 import Logo from './Logo';
 
 export default function Footer() {
   const [email, setEmail] = useState('');
+  const store = useStore();
+
+  // Only show socials that have a real URL configured in admin settings.
+  const SOCIALS = [
+    { Icon: Instagram, label: 'Instagram', url: store.instagram },
+    { Icon: Facebook, label: 'Facebook', url: store.facebook },
+    { Icon: Twitter, label: 'Twitter / X', url: store.twitter },
+  ].filter((s) => s.url && s.url !== '#');
 
   const subscribe = async (e) => {
     e.preventDefault();
@@ -24,8 +33,9 @@ export default function Footer() {
           <Logo white className="h-14" />
           <p className="mt-4 text-sm text-gray-400">Premium fashion, curated for the modern wardrobe. Timeless pieces, crafted with care.</p>
           <div className="mt-5 flex gap-3">
-            {[Instagram, Facebook, Twitter].map((Icon, i) => (
-              <a key={i} href="#" className="rounded-full border border-white/10 p-2 hover:border-gold hover:text-gold"><Icon size={18} /></a>
+            {SOCIALS.map(({ Icon, label, url }) => (
+              <a key={label} href={url} target="_blank" rel="noopener noreferrer" aria-label={label} title={label}
+                className="rounded-full border border-white/10 p-2 hover:border-gold hover:text-gold"><Icon size={18} /></a>
             ))}
           </div>
         </div>

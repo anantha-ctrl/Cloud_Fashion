@@ -9,9 +9,15 @@ This covers local (XAMPP) setup and production deployment of the **PHP API** and
 
 1. Place the `CloudFashion` folder in `xampp/htdocs/` (already done if you see this).
 2. Start **Apache** + **MySQL** from the XAMPP Control Panel.
-3. Import the database:
+3. Import the database, then apply the incremental migrations in order:
    - phpMyAdmin → Import → `database/cloudfashion.sql`, **or**
    - `mysql -u root -p < database/cloudfashion.sql`
+   ```bash
+   # apply every migration in order (002 → 016)
+   for f in database/migration_*.sql; do mysql -u root -p cloudfashion < "$f"; done
+   ```
+   > The migrations add reviews moderation, returns, loyalty/referrals, the `settings`
+   > key/value store, and the Contact Us inbox. Skipping them disables those features.
 4. Backend config: copy `backend/.env.example` → `backend/.env`, set `DB_PASS` and a strong `JWT_SECRET`.
 5. Frontend:
    ```bash
@@ -19,7 +25,8 @@ This covers local (XAMPP) setup and production deployment of the **PHP API** and
    npm install
    npm run dev
    ```
-6. Visit `http://localhost:5173`. API is served by Apache at
+6. Visit `http://localhost:5190` (the dev port is pinned to **5190** via `strictPort` so the
+   JWT in `localStorage` isn't lost to a drifting port). API is served by Apache at
    `http://localhost/CloudFashion/backend`.
 
 > Apache must have `mod_rewrite` enabled (default in XAMPP) for the API's `.htaccess` routing.
@@ -52,6 +59,20 @@ This covers local (XAMPP) setup and production deployment of the **PHP API** and
 3. Test card: `4111 1111 1111 1111`, any future expiry, any CVV.
    Without keys, checkout runs in **test mode** and auto-completes orders.
 
+### Google Sign-In (optional)
+1. [Google Cloud Console](https://console.cloud.google.com/) → **APIs & Services → Credentials**
+   → **Create Credentials → OAuth client ID → Web application**.
+2. Under **Authorized JavaScript origins** add your frontend origin
+   (dev: `http://localhost:5190`; prod: `https://yourdomain.com`).
+3. Paste the Client ID into **both**:
+   ```
+   backend/.env    GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+   frontend/.env   VITE_GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com
+   ```
+4. Restart the dev server. Without a Client ID the button shows a "not configured" notice and the
+   `POST /api/auth/google` endpoint returns 503. The backend validates the token's `aud` before
+   creating/linking the user.
+
 ---
 
 ## 3. Production Deployment
@@ -59,10 +80,14 @@ This covers local (XAMPP) setup and production deployment of the **PHP API** and
 ### Backend (PHP) — shared host / VPS (Apache or Nginx)
 1. Upload `backend/` and `database/` to the server.
 2. Create the MySQL DB and import `cloudfashion.sql`.
+2b. Apply the migrations after importing the base schema (see §1, step 3).
 3. Create `backend/.env` with production values:
    - `APP_ENV=production`
    - real `DB_*`, strong `JWT_SECRET`, live SMTP/Cloudinary/Razorpay keys
+   - `GOOGLE_CLIENT_ID` (if using Google Sign-In)
    - `FRONTEND_URL=https://yourdomain.com`
+   > After deploy, set the store's public details, announcement bar, free-shipping
+   > threshold, socials and loyalty rules from **Admin → Settings / Loyalty** (stored in DB).
 4. Point a domain/subdomain (e.g. `api.yourdomain.com`) at the `backend/` directory.
 5. **Apache:** ensure `AllowOverride All` so `.htaccess` works.
    **Nginx:** route all non-file requests to `index.php`:
@@ -81,6 +106,7 @@ This covers local (XAMPP) setup and production deployment of the **PHP API** and
    ```
    VITE_API_URL=https://api.yourdomain.com
    VITE_RAZORPAY_KEY=rzp_live_xxx
+   VITE_GOOGLE_CLIENT_ID=xxxxxxxx.apps.googleusercontent.com   # if using Google Sign-In
    ```
 2. Build:
    ```bash
@@ -104,6 +130,9 @@ This covers local (XAMPP) setup and production deployment of the **PHP API** and
 - [ ] Restrict CORS `Access-Control-Allow-Origin` to your domain
 - [ ] Live Razorpay keys + webhook (optional) for payment reconciliation
 - [ ] SMTP configured and deliverability tested
+- [ ] All migrations (002 → 016) applied after the base schema
+- [ ] Google OAuth origins updated to the production domain (if used)
+- [ ] Store details / loyalty rules set in **Admin → Settings / Loyalty**
 - [ ] Database backups scheduled
 - [ ] Change default admin password after first login
 - [ ] Deny direct web access to `backend/.env` and `backend/storage/`

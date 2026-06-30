@@ -5,6 +5,7 @@ import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { useWishlist } from '../context/WishlistContext';
+import { useStore } from '../context/StoreContext';
 import api from '../api/client';
 import { inr } from '../utils/format';
 import Logo from './Logo';
@@ -22,6 +23,7 @@ export default function Navbar() {
   const { user, logout, isAdmin } = useAuth();
   const { count } = useCart();
   const { count: wishCount } = useWishlist();
+  const { announcement } = useStore();
   const [cats, setCats] = useState([]);
   const [openMenu, setOpenMenu] = useState(false);
   const [q, setQ] = useState('');
@@ -83,9 +85,11 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-50">
-      <div className="bg-ink text-center text-xs tracking-widest text-gold py-1.5">
-        FREE SHIPPING OVER ₹1999 · EASY 7-DAY RETURNS · USE CODE WELCOME10
-      </div>
+      {announcement && (
+        <div className="bg-ink text-center text-xs tracking-widest text-gold py-1.5">
+          {announcement}
+        </div>
+      )}
       <nav className="glass border-b border-black/5 dark:border-white/10">
         <div className="mx-auto flex max-w-7xl items-center gap-2 px-3 py-3 sm:gap-4 sm:px-4">
           <button className="-ml-1 p-1 lg:hidden" onClick={() => setOpenMenu(true)} aria-label="menu"><Menu /></button>
@@ -154,6 +158,7 @@ export default function Navbar() {
                     <p className="px-3 py-2 font-semibold">{user.name}</p>
                     <Dropdown to="/profile">My Profile</Dropdown>
                     <Dropdown to="/orders">My Orders</Dropdown>
+                    <Dropdown to="/profile?tab=rewards">Rewards</Dropdown>
                     <Dropdown to="/wishlist">Wishlist</Dropdown>
                     {isAdmin && (
                       <Dropdown to="/admin"><span className="flex items-center gap-2"><LayoutDashboard size={14}/>Admin</span></Dropdown>
@@ -208,6 +213,7 @@ export default function Navbar() {
                   <ul className="space-y-1">
                     <DrawerLink to="/profile" close={() => setOpenMenu(false)}>My Profile</DrawerLink>
                     <DrawerLink to="/orders" close={() => setOpenMenu(false)}>My Orders</DrawerLink>
+                    <DrawerLink to="/profile?tab=rewards" close={() => setOpenMenu(false)}>Rewards</DrawerLink>
                     <DrawerLink to="/wishlist" close={() => setOpenMenu(false)}>Wishlist</DrawerLink>
                     {isAdmin && <DrawerLink to="/admin" close={() => setOpenMenu(false)}>Admin Dashboard</DrawerLink>}
                   </ul>

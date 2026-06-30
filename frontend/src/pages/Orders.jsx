@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Package } from 'lucide-react';
+import { Package, Star } from 'lucide-react';
 import api from '../api/client';
 import { inr, dateFmt, statusColor } from '../utils/format';
 import { Spinner, Empty } from '../components/ui';
@@ -36,6 +36,11 @@ export default function Orders() {
                 <span className={`mt-1 inline-block rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusColor[o.status]}`}>
                   {o.status}
                 </span>
+                {o.status === 'delivered' && (
+                  <span className="mt-1 flex items-center justify-end gap-1 text-xs font-medium text-gold">
+                    <Star size={12} className="fill-gold" /> Rate your order
+                  </span>
+                )}
               </div>
             </Link>
           ))}

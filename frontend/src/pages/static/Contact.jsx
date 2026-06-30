@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { Mail, Phone, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../../api/client';
+import { useStore } from '../../context/StoreContext';
 
 export default function Contact() {
   const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
   const [loading, setLoading] = useState(false);
+  const info = useStore();
 
   const submit = async (e) => {
     e.preventDefault();
@@ -21,7 +23,7 @@ export default function Contact() {
       <h1 className="mt-2 font-display text-4xl font-bold">Contact Us</h1>
       <div className="mt-10 grid gap-10 md:grid-cols-2">
         <div className="space-y-6">
-          {[[Mail, 'Email', 'support@cloudfashion.com'], [Phone, 'Phone', '+91 98765 43210'], [MapPin, 'Studio', 'Bengaluru, India']].map(([Icon, t, v]) => (
+          {[[Mail, 'Email', info.email], [Phone, 'Phone', info.phone], [MapPin, 'Studio', info.address]].map(([Icon, t, v]) => (
             <div key={t} className="flex items-center gap-4">
               <div className="rounded-full bg-gold/10 p-3 text-gold"><Icon size={22} /></div>
               <div><p className="text-sm text-gray-400">{t}</p><p className="font-medium">{v}</p></div>

@@ -11,7 +11,7 @@ class ReviewController
                           AND o.status <> 'cancelled'
                     ) AS verified
              FROM reviews r JOIN users u ON u.id = r.user_id
-             WHERE r.product_id = ? ORDER BY r.created_at DESC"
+             WHERE r.product_id = ? AND r.is_hidden = 0 ORDER BY r.created_at DESC"
         );
         $stmt->execute([(int) $p['id']]);
         $rows = array_map(function ($r) {
@@ -33,14 +33,15 @@ class ReviewController
 
         $db = db();
 
-        // Only customers who actually purchased the product may review it.
+        // Only customers whose order for this product has been DELIVERED may
+        // review it (verified, post-delivery reviews).
         $bought = $db->prepare(
             "SELECT 1 FROM order_items oi JOIN orders o ON o.id = oi.order_id
-             WHERE o.user_id = ? AND oi.product_id = ? AND o.status <> 'cancelled' LIMIT 1"
+             WHERE o.user_id = ? AND oi.product_id = ? AND o.status = 'delivered' LIMIT 1"
         );
         $bought->execute([$userId, $productId]);
         if (!$bought->fetch()) {
-            Response::error('You can review only products you have purchased', 403);
+            Response::error('You can review a product only after it has been delivered', 403);
         }
 
         try {
@@ -56,13 +57,18 @@ class ReviewController
             Response::error('Could not save review', 400);
         }
 
-        // Recalculate aggregate rating
-        $agg = $db->prepare('SELECT COUNT(*) c, AVG(rating) a FROM reviews WHERE product_id=?');
+        self::recalcRating($db, $productId);
+
+        Response::success(null, 'Review submitted', 201);
+    }
+
+    /** Recompute a product's rating aggregate from its VISIBLE reviews only. */
+    public static function recalcRating(PDO $db, int $productId): void
+    {
+        $agg = $db->prepare('SELECT COUNT(*) c, AVG(rating) a FROM reviews WHERE product_id=? AND is_hidden=0');
         $agg->execute([$productId]);
         $row = $agg->fetch();
         $db->prepare('UPDATE products SET rating_count=?, rating_avg=? WHERE id=?')
-           ->execute([(int) $row['c'], round((float) $row['a'], 2), $productId]);
-
-        Response::success(null, 'Review submitted', 201);
+           ->execute([(int) $row['c'], round((float) ($row['a'] ?? 0), 2), $productId]);
     }
 }

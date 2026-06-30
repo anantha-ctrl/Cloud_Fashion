@@ -1,6 +1,4 @@
-// Replace with the store's real WhatsApp number (international format, no +).
-const WA_NUMBER = '919876543210';
-const WA_TEXT = encodeURIComponent('Hi Cloud Fashion! I have a question about my order.');
+import { useStore } from '../context/StoreContext';
 
 // Official WhatsApp glyph (lucide has no brand icon for it).
 function WhatsAppIcon({ size = 30 }) {
@@ -12,9 +10,13 @@ function WhatsAppIcon({ size = 30 }) {
 }
 
 export default function WhatsAppButton() {
+  const { whatsapp, name } = useStore();
+  if (!whatsapp) return null; // hidden until a number is configured in admin settings
+
+  const text = encodeURIComponent(`Hi ${name || 'Cloud Fashion'}! I have a question about my order.`);
   return (
     <a
-      href={`https://wa.me/${WA_NUMBER}?text=${WA_TEXT}`}
+      href={`https://wa.me/${whatsapp}?text=${text}`}
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Chat on WhatsApp"

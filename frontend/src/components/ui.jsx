@@ -22,7 +22,12 @@ export const Checkbox = ({ checked, onChange, className = '' }) => (
 
 export const Spinner = ({ className = '' }) => (
   <div className={`flex items-center justify-center py-16 ${className}`}>
-    <div className="h-9 w-9 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+    <div className="relative flex h-14 w-14 items-center justify-center">
+      {/* spinning gold ring */}
+      <span className="absolute inset-0 animate-spin rounded-full border-2 border-gold/25 border-t-gold" />
+      {/* brand logo, gently pulsing */}
+      <img src="/logo.png" alt="Loading" className="h-7 w-7 animate-pulse object-contain dark:invert" />
+    </div>
   </div>
 );
 

@@ -7,11 +7,10 @@ import { Spinner, Empty, SectionTitle } from '../components/ui';
 import { Search } from 'lucide-react';
 import Seo from '../components/Seo';
 
-const SIZES = ['S', 'M', 'L', 'XL', 'UK7', 'UK8', 'UK9'];
-const COLORS = ['Ivory', 'Noir', 'Blush', 'White', 'Black', 'Sage', 'Charcoal'];
 const SORTS = [
   ['newest', 'Newest'], ['price_asc', 'Price: Low to High'],
   ['price_desc', 'Price: High to Low'], ['popularity', 'Popularity'], ['rating', 'Top Rated'],
+  ['discount', 'Biggest Discount'],
 ];
 
 export default function Shop() {
@@ -24,12 +23,16 @@ export default function Shop() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [categoryName, setCategoryName] = useState('');
+  // Filter options (sizes/colors/price) come live from the backend, derived
+  // from the actual products in this category/search — not a hardcoded list.
+  const [facets, setFacets] = useState({ sizes: [], colors: [], price: { min: 0, max: 0 } });
   const [filters, setFilters] = useState({
     sort: params.get('sort') || 'newest',
     sizes: [], colors: [], min: '', max: '',
   });
 
   const search = params.get('search') || '';
+  const onSale = !!params.get('on_sale'); // "Shop the Sale" entry point
 
   // Resolve the real category name from its slug (slugs can carry a suffix,
   // e.g. "jewellery-3c4a", so we must not derive the title from the slug).
@@ -39,6 +42,16 @@ export default function Shop() {
       .then((r) => setCategoryName(r.data.data.find((c) => c.slug === slug)?.name || ''))
       .catch(() => setCategoryName(''));
   }, [slug]);
+
+  // Load the available filter facets for the current category/search.
+  useEffect(() => {
+    const qp = new URLSearchParams();
+    if (slug) qp.set('category', slug);
+    if (search) qp.set('search', search);
+    api.get(`/api/products/filters?${qp.toString()}`)
+      .then((r) => setFacets(r.data.data))
+      .catch(() => setFacets({ sizes: [], colors: [], price: { min: 0, max: 0 } }));
+  }, [slug, search]);
 
   const fetchProducts = useCallback(async (pageNum, append) => {
     append ? setLoadingMore(true) : setLoading(true);
@@ -50,6 +63,7 @@ export default function Shop() {
     if (filters.colors.length) qp.set('color', filters.colors.join(','));
     if (filters.min) qp.set('min_price', filters.min);
     if (filters.max) qp.set('max_price', filters.max);
+    if (onSale) qp.set('on_sale', '1'); // only discounted products
     qp.set('per_page', '12');
     qp.set('page', String(pageNum));
     try {
@@ -57,7 +71,7 @@ export default function Shop() {
       setPagination(data.data.pagination);
       setItems((prev) => (append ? [...prev, ...data.data.products] : data.data.products));
     } finally { append ? setLoadingMore(false) : setLoading(false); }
-  }, [slug, search, filters]);
+  }, [slug, search, onSale, filters]);
 
   // Reset to page 1 whenever the category, search, or filters change.
   useEffect(() => { setPage(1); fetchProducts(1, false); }, [fetchProducts]);
@@ -67,48 +81,55 @@ export default function Shop() {
   const toggleArr = (key, val) =>
     setFilters((f) => ({ ...f, [key]: f[key].includes(val) ? f[key].filter((x) => x !== val) : [...f[key], val] }));
 
-  const title = slug
+  const title = onSale ? 'Sale'
+    : slug
     ? (categoryName || slug.replace(/-[a-z0-9]{4}$/i, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
     : search ? `Results for "${search}"` : 'All Products';
+  const eyebrow = onSale ? 'Limited Offer' : 'Collection';
 
   const FilterPanel = (
     <div className="space-y-7">
       <FilterGroup title="Price Range">
         <div className="flex items-center gap-2">
-          <input type="number" placeholder="Min" value={filters.min}
+          <input type="number" placeholder={facets.price.min ? `Min ₹${facets.price.min}` : 'Min'} value={filters.min}
             onChange={(e) => setFilters((f) => ({ ...f, min: e.target.value }))} className="input !py-2 text-sm" />
           <span>–</span>
-          <input type="number" placeholder="Max" value={filters.max}
+          <input type="number" placeholder={facets.price.max ? `Max ₹${facets.price.max}` : 'Max'} value={filters.max}
             onChange={(e) => setFilters((f) => ({ ...f, max: e.target.value }))} className="input !py-2 text-sm" />
         </div>
       </FilterGroup>
-      <FilterGroup title="Size">
-        <div className="flex flex-wrap gap-2">
-          {SIZES.map((s) => (
-            <button key={s} onClick={() => toggleArr('sizes', s)}
-              className={`rounded-lg border px-3 py-1.5 text-sm transition ${filters.sizes.includes(s) ? 'border-gold bg-gold/10 text-gold' : 'border-black/10 dark:border-white/10'}`}>
-              {s}
-            </button>
-          ))}
-        </div>
-      </FilterGroup>
-      <FilterGroup title="Color">
-        <div className="flex flex-wrap gap-2">
-          {COLORS.map((c) => (
-            <button key={c} onClick={() => toggleArr('colors', c)}
-              className={`rounded-lg border px-3 py-1.5 text-sm transition ${filters.colors.includes(c) ? 'border-gold bg-gold/10 text-gold' : 'border-black/10 dark:border-white/10'}`}>
-              {c}
-            </button>
-          ))}
-        </div>
-      </FilterGroup>
+      {facets.sizes.length > 0 && (
+        <FilterGroup title="Size">
+          <div className="flex flex-wrap gap-2">
+            {facets.sizes.map((s) => (
+              <button key={s} onClick={() => toggleArr('sizes', s)}
+                className={`rounded-lg border px-3 py-1.5 text-sm transition ${filters.sizes.includes(s) ? 'border-gold bg-gold/10 text-gold' : 'border-black/10 dark:border-white/10'}`}>
+                {s}
+              </button>
+            ))}
+          </div>
+        </FilterGroup>
+      )}
+      {facets.colors.length > 0 && (
+        <FilterGroup title="Color">
+          <div className="flex flex-wrap gap-2">
+            {facets.colors.map((c) => (
+              <button key={c.name} onClick={() => toggleArr('colors', c.name)}
+                className={`flex items-center gap-2 rounded-lg border px-3 py-1.5 text-sm transition ${filters.colors.includes(c.name) ? 'border-gold bg-gold/10 text-gold' : 'border-black/10 dark:border-white/10'}`}>
+                {c.hex && <span className="h-3.5 w-3.5 rounded-full border border-black/10" style={{ backgroundColor: c.hex }} />}
+                {c.name}
+              </button>
+            ))}
+          </div>
+        </FilterGroup>
+      )}
     </div>
   );
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10">
       <Seo title={title} description={`Shop ${title} at Cloud Fashion. ${pagination?.total ?? ''} curated styles with filters for size, colour, brand and price.`} />
-      <SectionTitle eyebrow="Collection" title={title} />
+      <SectionTitle eyebrow={eyebrow} title={title} />
 
       <div className="mb-6 flex items-center justify-between gap-3">
         <button onClick={() => setShowFilters(true)} className="btn-outline !py-2 text-sm lg:hidden">

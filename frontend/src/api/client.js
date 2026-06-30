@@ -39,27 +39,36 @@ export function isTokenExpired() {
   }
 }
 
+const forceLogout = () => {
+  localStorage.removeItem('cf_token');
+  localStorage.removeItem('cf_user');
+  // Tell AuthContext to clear React state; ProtectedRoute then redirects to /login.
+  window.dispatchEvent(new Event('cf:logout'));
+};
+
 // Normalize errors + handle 401 globally
 api.interceptors.response.use(
   (res) => res,
   (error) => {
     const status = error.response?.status;
     const url = error.config?.url || '';
-    // Force a logout on a 401 when:
-    //  - the token is actually expired/missing, OR
-    //  - /auth/me itself is rejected (definitive "token invalid" signal), OR
-    //  - any /api/admin/ call is rejected — admin routes require a valid admin
-    //    token, so a 401 there always means a dead session. Logging out here
-    //    redirects to /login instead of looping (e.g. the reports auto-refresh).
-    // A stray 401 on a public/customer endpoint while the token still looks
-    // valid is treated as transient, so customers aren't kicked out at random.
-    const isAdminCall = url.includes('/api/admin/');
-    if (status === 401 && !url.includes('/auth/login') && (isTokenExpired() || url.includes('/auth/me') || isAdminCall)) {
-      localStorage.removeItem('cf_token');
-      localStorage.removeItem('cf_user');
-      // Tell AuthContext to clear React state; ProtectedRoute then redirects to /login.
-      window.dispatchEvent(new Event('cf:logout'));
+
+    if (status === 401 && !url.includes('/auth/login')) {
+      if (isTokenExpired() || url.includes('/auth/me')) {
+        // Definitive: the token is gone/expired, or /me itself (the source of
+        // truth) rejected it. End the session immediately.
+        forceLogout();
+      } else {
+        // The token still LOOKS valid but a call 401'd — likely transient (a
+        // race, a backgrounded poll, a brief hiccup). Do NOT nuke the session
+        // on a single failure (that caused "Authentication required" mid-edit).
+        // Verify against /me: only log out if the server truly rejects it.
+        api.get('/api/auth/me').catch((e) => {
+          if (e?.response?.status === 401) forceLogout();
+        });
+      }
     }
+
     const message = error.response?.data?.message || 'Something went wrong';
     return Promise.reject({ ...error, message, errors: error.response?.data?.errors });
   }

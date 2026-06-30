@@ -1,14 +1,20 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import AuthShell from './AuthShell';
 import PasswordInput from '../../components/PasswordInput';
+import PasswordStrength from '../../components/PasswordStrength';
 import { useAuth } from '../../context/AuthContext';
 
 export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', phone: '', password: '', password_confirmation: '' });
+  const [params] = useSearchParams();
+  const [form, setForm] = useState({
+    name: '', email: '', phone: '', password: '', password_confirmation: '',
+    referral_code: (params.get('ref') || '').toUpperCase(),
+  });
   const [loading, setLoading] = useState(false);
 
   const submit = async (e) => {
@@ -33,10 +39,25 @@ export default function Register() {
           onChange={(e) => setForm({ ...form, email: e.target.value })} />
         <input className="input" placeholder="Phone (optional)" value={form.phone}
           onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-        <PasswordInput required placeholder="Password (min 6 chars)" value={form.password}
-          onChange={(e) => setForm({ ...form, password: e.target.value })} />
-        <PasswordInput required placeholder="Confirm password" value={form.password_confirmation}
-          onChange={(e) => setForm({ ...form, password_confirmation: e.target.value })} />
+        <div>
+          <PasswordInput required placeholder="Password (min 6 chars)" value={form.password}
+            onChange={(e) => setForm({ ...form, password: e.target.value })} />
+          <PasswordStrength value={form.password} />
+        </div>
+        <div>
+          <PasswordInput required placeholder="Confirm password" value={form.password_confirmation}
+            onChange={(e) => setForm({ ...form, password_confirmation: e.target.value })} />
+          {form.password_confirmation && (
+            <p className={`mt-1.5 flex items-center gap-1.5 text-xs ${
+              form.password === form.password_confirmation ? 'text-green-600' : 'text-red-500'}`}>
+              {form.password === form.password_confirmation
+                ? <><Check size={13} /> Passwords match</>
+                : <><X size={13} /> Passwords don’t match</>}
+            </p>
+          )}
+        </div>
+        <input className="input" placeholder="Referral code (optional)" value={form.referral_code}
+          onChange={(e) => setForm({ ...form, referral_code: e.target.value.toUpperCase() })} />
         <button disabled={loading} className="btn-gold w-full">{loading ? 'Creating…' : 'Create Account'}</button>
       </form>
     </AuthShell>

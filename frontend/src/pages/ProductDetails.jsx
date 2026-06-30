@@ -24,6 +24,7 @@ export default function ProductDetails() {
   const { user } = useAuth();
   const [product, setProduct] = useState(null);
   const [related, setRelated] = useState([]);
+  const [fbt, setFbt] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [activeImg, setActiveImg] = useState(0);
   const [size, setSize] = useState(null);
@@ -46,6 +47,7 @@ export default function ProductDetails() {
         try { pushLocalRecent(p); } catch { /* localStorage quota — ignore */ }
         const id = p.id;
         api.get(`/api/products/${slug}/related`).then((x) => !cancelled && setRelated(x.data.data)).catch(() => {});
+        api.get(`/api/products/${slug}/frequently-bought`).then((x) => !cancelled && setFbt(x.data.data)).catch(() => {});
         api.get(`/api/products/${id}/reviews`).then((x) => !cancelled && setReviews(x.data.data)).catch(() => {});
         if (user) api.post('/api/recently-viewed', { product_id: id }).catch(() => {});
       })
@@ -296,6 +298,16 @@ export default function ProductDetails() {
           <button className="btn-gold w-full">Submit Review</button>
         </form>
       </div>
+
+      {/* FREQUENTLY BOUGHT TOGETHER */}
+      {fbt.length > 0 && (
+        <div className="mt-16">
+          <SectionTitle eyebrow="Complete the look" title="Frequently Bought Together" />
+          <div className="grid grid-cols-2 gap-5 md:grid-cols-4">
+            {fbt.slice(0, 4).map((p) => <ProductCard key={p.id} product={p} />)}
+          </div>
+        </div>
+      )}
 
       {/* RELATED */}
       {related.length > 0 && (

@@ -4,6 +4,7 @@ import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import MobileTabBar from './components/MobileTabBar';
 import WhatsAppButton from './components/WhatsAppButton';
+import CompareBar from './components/CompareBar';
 import ProtectedRoute from './components/ProtectedRoute';
 import { Spinner } from './components/ui';
 
@@ -13,6 +14,7 @@ const Shop = lazy(() => import('./pages/Shop'));
 const ProductDetails = lazy(() => import('./pages/ProductDetails'));
 const Cart = lazy(() => import('./pages/Cart'));
 const Wishlist = lazy(() => import('./pages/Wishlist'));
+const Compare = lazy(() => import('./pages/Compare'));
 const Checkout = lazy(() => import('./pages/Checkout'));
 const Orders = lazy(() => import('./pages/Orders'));
 const OrderDetail = lazy(() => import('./pages/OrderDetail'));
@@ -41,14 +43,24 @@ const AdminCoupons = lazy(() => import('./admin/AdminCoupons'));
 const AdminInventory = lazy(() => import('./admin/AdminInventory'));
 const AdminReports = lazy(() => import('./admin/AdminReports'));
 const AdminBanners = lazy(() => import('./admin/AdminBanners'));
+const AdminReviews = lazy(() => import('./admin/AdminReviews'));
+const AdminReturns = lazy(() => import('./admin/AdminReturns'));
+const AdminLoyalty = lazy(() => import('./admin/AdminLoyalty'));
+const AdminMessages = lazy(() => import('./admin/AdminMessages'));
+const AdminSettings = lazy(() => import('./admin/AdminSettings'));
+
+const AUTH_ROUTES = ['/login', '/register', '/verify-otp', '/forgot-password', '/reset-password'];
 
 export default function App() {
   const { pathname } = useLocation();
   const isAdmin = pathname.startsWith('/admin');
+  // Auth pages are a full-screen split — no storefront chrome around them.
+  const isAuth = AUTH_ROUTES.some((r) => pathname.startsWith(r));
+  const bare = isAdmin || isAuth;
 
   return (
     <div className="flex min-h-screen flex-col">
-      {!isAdmin && <Navbar />}
+      {!bare && <Navbar />}
       <main className="flex-1">
         <Suspense fallback={<Spinner className="min-h-[60vh]" />}>
         <Routes>
@@ -58,6 +70,7 @@ export default function App() {
           <Route path="/category/:slug" element={<Shop />} />
           <Route path="/product/:slug" element={<ProductDetails />} />
           <Route path="/cart" element={<Cart />} />
+          <Route path="/compare" element={<Compare />} />
           <Route path="/wishlist" element={<ProtectedRoute><Wishlist /></ProtectedRoute>} />
           <Route path="/checkout" element={<ProtectedRoute><Checkout /></ProtectedRoute>} />
           <Route path="/order-success/:id" element={<ProtectedRoute><OrderSuccess /></ProtectedRoute>} />
@@ -89,6 +102,11 @@ export default function App() {
             <Route path="customers" element={<AdminCustomers />} />
             <Route path="coupons" element={<AdminCoupons />} />
             <Route path="banners" element={<AdminBanners />} />
+            <Route path="reviews" element={<AdminReviews />} />
+            <Route path="returns" element={<AdminReturns />} />
+            <Route path="loyalty" element={<AdminLoyalty />} />
+            <Route path="messages" element={<AdminMessages />} />
+            <Route path="settings" element={<AdminSettings />} />
             <Route path="inventory" element={<AdminInventory />} />
             <Route path="reports" element={<AdminReports />} />
           </Route>
@@ -97,9 +115,10 @@ export default function App() {
         </Routes>
         </Suspense>
       </main>
-      {!isAdmin && <Footer />}
-      {!isAdmin && <MobileTabBar />}
-      {!isAdmin && <WhatsAppButton />}
+      {!bare && <Footer />}
+      {!bare && <MobileTabBar />}
+      {!bare && <WhatsAppButton />}
+      {!bare && <CompareBar />}
     </div>
   );
 }
