@@ -30,7 +30,7 @@ export default function Register() {
   };
 
   return (
-    <AuthShell title="Create account" subtitle="Join Cloud Fashion for exclusive drops"
+    <AuthShell title="Create account" subtitle="Join Nova Clothing for exclusive drops"
       footer={<>Already have an account? <Link to="/login" className="font-semibold text-gold">Sign in</Link></>}>
       <form onSubmit={submit} className="space-y-4">
         <input required className="input" placeholder="Full name" value={form.name}

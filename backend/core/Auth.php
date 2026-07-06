@@ -72,6 +72,16 @@ class Auth
         return $user;
     }
 
+    /** Requires billing-counter staff: an admin OR a cashier. */
+    public static function staff(): array
+    {
+        $user = self::user();
+        if (!in_array($user['role'] ?? '', ['admin', 'cashier'], true)) {
+            Response::error('Staff access required', 403);
+        }
+        return $user;
+    }
+
     /** Optional auth - returns user payload or null without erroring. */
     public static function optional(): ?array
     {

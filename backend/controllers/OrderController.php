@@ -324,7 +324,7 @@ class OrderController
         if ($user = $u->fetch()) {
             Mailer::send(
                 $user['email'],
-                'Cloud Fashion · Order ' . $d['order_number'] . ' confirmed',
+                Mailer::brand() . ' · Order ' . $d['order_number'] . ' confirmed',
                 Mailer::orderPlacedTemplate($user['name'], $d['order_number'], (float) $d['total'])
             );
         }

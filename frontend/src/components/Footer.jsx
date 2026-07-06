@@ -21,7 +21,7 @@ export default function Footer() {
     e.preventDefault();
     try {
       await api.post('/api/newsletter', { email });
-      toast.success('Subscribed! Welcome to Cloud Fashion.');
+      toast.success(`Subscribed! Welcome to ${store.name}.`);
       setEmail('');
     } catch (err) { toast.error(err.message); }
   };
@@ -66,7 +66,7 @@ export default function Footer() {
         </div>
       </div>
       <div className="border-t border-white/10 py-5 text-center text-xs text-gray-500">
-        © {new Date().getFullYear()} Cloud Fashion. All rights reserved. Designed and Developed By <a href="https://cloudhawk.in/">CloudHawk</a>.
+        © {new Date().getFullYear()} {store.name}. All rights reserved. Designed and Developed By <a href="https://cloudhawk.in/">CloudHawk</a>.
       </div>
     </footer>
   );

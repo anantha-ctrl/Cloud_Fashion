@@ -39,7 +39,7 @@ export function printInvoice(order) {
 <body>
   <div class="head">
     <div>
-      <img class="brand" src="${logoUrl}" alt="Cloud Fashion" />
+      <img class="brand" src="${logoUrl}" alt="Nova Clothing" />
       <div class="muted" style="margin-top:6px">Premium fashion, curated for you.</div>
     </div>
     <div style="text-align:right">
@@ -77,7 +77,7 @@ export function printInvoice(order) {
     <div class="grand"><span>Total</span><span>${inr(order.total)}</span></div>
   </div>
 
-  <div class="foot">Thank you for shopping with Cloud Fashion · support@cloudfashion.com</div>
+  <div class="foot">Thank you for shopping with Nova Clothing · support@cloudfashion.com</div>
   <script>window.onload = () => { window.print(); }</script>
 </body></html>`;
 

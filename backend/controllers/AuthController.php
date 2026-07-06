@@ -216,7 +216,7 @@ class AuthController
                  VALUES (?,?,'password_reset', DATE_ADD(NOW(), INTERVAL 30 MINUTE))"
             )->execute([$user['id'], $token]);
             $link = rtrim(env('FRONTEND_URL'), '/') . "/reset-password?token=$token&email=" . urlencode($email);
-            Mailer::send($email, 'Reset your Cloud Fashion password', Mailer::resetTemplate($user['name'], $link));
+            Mailer::send($email, 'Reset your ' . Mailer::brand() . ' password', Mailer::resetTemplate($user['name'], $link));
         }
         Response::success(null, 'If the email exists, a reset link has been sent.');
     }
@@ -312,7 +312,7 @@ class AuthController
             "INSERT INTO auth_tokens (user_id, token, type, expires_at)
              VALUES (?,?,'email_otp', DATE_ADD(NOW(), INTERVAL 10 MINUTE))"
         )->execute([$userId, $otp]);
-        Mailer::send($email, 'Your Cloud Fashion verification code', Mailer::otpTemplate($name, $otp));
+        Mailer::send($email, 'Your ' . Mailer::brand() . ' verification code', Mailer::otpTemplate($name, $otp));
     }
 
     private function userByEmail(?string $email): ?array

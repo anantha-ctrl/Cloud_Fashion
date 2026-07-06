@@ -17,7 +17,11 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   const goAfterLogin = (user) =>
-    navigate(user.role === 'admin' ? '/admin' : location.state?.from?.pathname || '/');
+    navigate(
+      user.role === 'admin' ? '/admin'
+        : user.role === 'cashier' ? '/cashier'
+        : location.state?.from?.pathname || '/',
+    );
 
   const googleSignIn = () => {
     if (!GOOGLE_CLIENT_ID) {

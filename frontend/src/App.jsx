@@ -9,6 +9,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import { Spinner } from './components/ui';
 
 // Customer pages (lazy-loaded for a smaller initial bundle)
+const Landing = lazy(() => import('./landing/Landing'));
 const Home = lazy(() => import('./pages/Home'));
 const Shop = lazy(() => import('./pages/Shop'));
 const ProductDetails = lazy(() => import('./pages/ProductDetails'));
@@ -38,6 +39,9 @@ const AdminProducts = lazy(() => import('./admin/AdminProducts'));
 const AdminProductForm = lazy(() => import('./admin/AdminProductForm'));
 const AdminCategories = lazy(() => import('./admin/AdminCategories'));
 const AdminOrders = lazy(() => import('./admin/AdminOrders'));
+const AdminBilling = lazy(() => import('./admin/AdminBilling'));
+const AdminStaff = lazy(() => import('./admin/AdminStaff'));
+const CashierLayout = lazy(() => import('./admin/CashierLayout'));
 const AdminCustomers = lazy(() => import('./admin/AdminCustomers'));
 const AdminCoupons = lazy(() => import('./admin/AdminCoupons'));
 const AdminInventory = lazy(() => import('./admin/AdminInventory'));
@@ -53,10 +57,13 @@ const AUTH_ROUTES = ['/login', '/register', '/verify-otp', '/forgot-password', '
 
 export default function App() {
   const { pathname } = useLocation();
-  const isAdmin = pathname.startsWith('/admin');
+  // Admin + cashier both ship their own layout header — no storefront chrome.
+  const isAdmin = pathname.startsWith('/admin') || pathname.startsWith('/cashier');
   // Auth pages are a full-screen split — no storefront chrome around them.
   const isAuth = AUTH_ROUTES.some((r) => pathname.startsWith(r));
-  const bare = isAdmin || isAuth;
+  // The landing page ships its own premium nav + footer — no shared chrome.
+  const isLanding = pathname === '/';
+  const bare = isAdmin || isAuth || isLanding;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -65,7 +72,8 @@ export default function App() {
         <Suspense fallback={<Spinner className="min-h-[60vh]" />}>
         <Routes>
           {/* Customer */}
-          <Route path="/" element={<Home />} />
+          <Route path="/" element={<Landing />} />
+          <Route path="/home" element={<Home />} />
           <Route path="/shop" element={<Shop />} />
           <Route path="/category/:slug" element={<Shop />} />
           <Route path="/product/:slug" element={<ProductDetails />} />
@@ -91,6 +99,9 @@ export default function App() {
           <Route path="/privacy" element={<Privacy />} />
           <Route path="/terms" element={<Terms />} />
 
+          {/* Cashier — billing counter only */}
+          <Route path="/cashier" element={<ProtectedRoute roles={['cashier', 'admin']}><CashierLayout /></ProtectedRoute>} />
+
           {/* Admin */}
           <Route path="/admin" element={<ProtectedRoute adminOnly><AdminLayout /></ProtectedRoute>}>
             <Route index element={<Dashboard />} />
@@ -99,6 +110,7 @@ export default function App() {
             <Route path="products/:id/edit" element={<AdminProductForm />} />
             <Route path="categories" element={<AdminCategories />} />
             <Route path="orders" element={<AdminOrders />} />
+            <Route path="billing" element={<AdminBilling />} />
             <Route path="customers" element={<AdminCustomers />} />
             <Route path="coupons" element={<AdminCoupons />} />
             <Route path="banners" element={<AdminBanners />} />
@@ -106,6 +118,7 @@ export default function App() {
             <Route path="returns" element={<AdminReturns />} />
             <Route path="loyalty" element={<AdminLoyalty />} />
             <Route path="messages" element={<AdminMessages />} />
+            <Route path="cashiers" element={<AdminStaff />} />
             <Route path="settings" element={<AdminSettings />} />
             <Route path="inventory" element={<AdminInventory />} />
             <Route path="reports" element={<AdminReports />} />

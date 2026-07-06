@@ -139,7 +139,7 @@ export default function Checkout() {
         key: order.razorpay_key,
         amount: order.amount,
         currency: order.currency,
-        name: 'Cloud Fashion',
+        name: 'Nova Clothing',
         image: `${window.location.origin}/logo.png`,
         description: `Order ${order.order_number}`,
         order_id: order.razorpay_order_id,

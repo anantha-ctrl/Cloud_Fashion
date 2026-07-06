@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 export default function ShareButtons({ title }) {
   const [copied, setCopied] = useState(false);
   const url = typeof window !== 'undefined' ? window.location.href : '';
-  const text = encodeURIComponent(`Check out "${title}" on Cloud Fashion`);
+  const text = encodeURIComponent(`Check out "${title}" on Nova Clothing`);
   const enc = encodeURIComponent(url);
 
   const links = [

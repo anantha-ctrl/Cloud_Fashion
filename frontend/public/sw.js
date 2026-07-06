@@ -1,4 +1,4 @@
-/* Cloud Fashion service worker — app-shell caching for installability + offline fallback. */
+/* Nova Clothing service worker — app-shell caching for installability + offline fallback. */
 const CACHE = 'cloudfashion-v1';
 const SHELL = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg'];
 

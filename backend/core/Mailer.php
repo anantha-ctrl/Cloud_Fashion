@@ -32,7 +32,7 @@ class Mailer
         $user = env('SMTP_USER');
         $pass = env('SMTP_PASS');
         $from = env('MAIL_FROM', $user ?: 'no-reply@cloudfashion.com');
-        $fromName = env('MAIL_FROM_NAME', 'Cloud Fashion');
+        $fromName = env('MAIL_FROM_NAME', self::brand());
 
         if (!$user || !$pass) {
             self::log($to, $subject, $html); // not configured yet — don't break the flow
@@ -94,11 +94,18 @@ class Mailer
         return true;
     }
 
+    /** Live brand name (admin-editable in Settings), used across every email. */
+    public static function brand(): string
+    {
+        return (string) Setting::get('store_name', 'Nova Clothing');
+    }
+
     public static function otpTemplate(string $name, string $otp): string
     {
+        $brand = self::brand();
         return "
         <div style='font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:32px;background:#0b0b0f;color:#fff;border-radius:16px'>
-            <h2 style='color:#c9a96a'>Cloud Fashion</h2>
+            <h2 style='color:#c9a96a'>$brand</h2>
             <p>Hi $name,</p>
             <p>Your verification code is:</p>
             <div style='font-size:34px;letter-spacing:10px;font-weight:700;color:#c9a96a;margin:18px 0'>$otp</div>
@@ -109,11 +116,12 @@ class Mailer
     /** Shared shell for transactional emails. */
     private static function shell(string $inner): string
     {
+        $brand = self::brand();
         return "
         <div style='font-family:Arial,sans-serif;max-width:520px;margin:auto;padding:32px;background:#0b0b0f;color:#fff;border-radius:16px'>
-            <h2 style='color:#c9a96a;margin:0 0 16px'>Cloud Fashion</h2>
+            <h2 style='color:#c9a96a;margin:0 0 16px'>$brand</h2>
             $inner
-            <p style='color:#777;font-size:12px;margin-top:28px'>Cloud Fashion · Premium fashion, curated for you.</p>
+            <p style='color:#777;font-size:12px;margin-top:28px'>$brand · Premium fashion, curated for you.</p>
         </div>";
     }
 
@@ -167,9 +175,10 @@ class Mailer
 
     public static function resetTemplate(string $name, string $link): string
     {
+        $brand = self::brand();
         return "
         <div style='font-family:Arial,sans-serif;max-width:480px;margin:auto;padding:32px;background:#0b0b0f;color:#fff;border-radius:16px'>
-            <h2 style='color:#c9a96a'>Cloud Fashion</h2>
+            <h2 style='color:#c9a96a'>$brand</h2>
             <p>Hi $name,</p>
             <p>Click below to reset your password (valid 30 minutes):</p>
             <a href='$link' style='display:inline-block;margin-top:12px;padding:12px 22px;background:#c9a96a;color:#000;border-radius:10px;text-decoration:none;font-weight:700'>Reset Password</a>

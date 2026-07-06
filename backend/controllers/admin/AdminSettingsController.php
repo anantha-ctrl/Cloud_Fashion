@@ -5,6 +5,7 @@ class AdminSettingsController
     // key => validate-as ('email' keys are validated as addresses; others free text).
     const FIELDS = [
         'store_name'              => 'text',
+        'store_logo'              => 'text',
         'store_contact_email'     => 'email',
         'store_contact_phone'     => 'text',
         'store_address'           => 'text',
@@ -16,18 +17,42 @@ class AdminSettingsController
         'store_facebook'          => 'text',
         'store_twitter'           => 'text',
         'store_whatsapp'          => 'text',
+        // Homepage (landing) storytelling copy — live on the landing hero + story.
+        'landing_hero_eyebrow'    => 'text',
+        'landing_hero_title'      => 'text',
+        'landing_hero_accent'     => 'text',
+        'landing_hero_subtitle'   => 'text',
+        'landing_hero_cta'        => 'text',
+        'landing_hero_cta_link'   => 'text',
+        'landing_story_quote'     => 'text',
+        // Landing imagery (URLs)
+        'landing_img_hero'        => 'text',
+        'landing_img_intro'       => 'text',
+        'landing_img_men'         => 'text',
+        'landing_img_women'       => 'text',
+        'landing_img_kids'        => 'text',
+        'landing_img_newarrival'  => 'text',
+        // Billing / POS invoice defaults
+        'billing_tax_pct'         => 'number',
+        'billing_invoice_prefix'  => 'text',
+        'billing_footer_note'     => 'text',
     ];
+
+    /** Current values for every known setting (any prefix). */
+    private static function collect(): array
+    {
+        $out = [];
+        foreach (self::FIELDS as $key => $_) {
+            $out[$key] = Setting::get($key, '');
+        }
+        return $out;
+    }
 
     /** GET /api/admin/settings — current store settings. */
     public function index(array $p): void
     {
         Auth::admin();
-        $vals = Setting::many('store_');
-        $out = [];
-        foreach (self::FIELDS as $key => $_) {
-            $out[$key] = $vals[$key] ?? '';
-        }
-        Response::success($out);
+        Response::success(self::collect());
     }
 
     /** PUT /api/admin/settings — save changed store settings. */
@@ -46,13 +71,17 @@ class AdminSettingsController
             if ($type === 'number') {
                 $val = (string) max(0, (int) $val);
             }
+            // Image uploads (store logo + landing images): push data URIs to Cloudinary
+            // when configured, else store them inline (settings.value is MEDIUMTEXT).
+            $isImageKey = $key === 'store_logo' || str_starts_with($key, 'landing_img_');
+            if ($isImageKey && str_starts_with($val, 'data:image')) {
+                $up = Cloudinary::upload($val, 'cloudfashion/branding');
+                if ($up) {
+                    $val = $up['url'];
+                }
+            }
             Setting::set($key, $val);
         }
-        $vals = Setting::many('store_');
-        $out = [];
-        foreach (self::FIELDS as $key => $_) {
-            $out[$key] = $vals[$key] ?? '';
-        }
-        Response::success($out, 'Settings saved');
+        Response::success(self::collect(), 'Settings saved');
     }
 }

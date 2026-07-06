@@ -1,6 +1,71 @@
 <?php
 class MiscController
 {
+    /**
+     * GET /api/products/{id}/thumb — public passthrough for a product's primary image.
+     * Keeps list/search JSON tiny: heavy admin-uploaded base64 images are streamed
+     * as real binary (cached) here instead of being embedded in every response.
+     *   - http(s) URL   → 302 redirect to it
+     *   - data:... URI  → decode base64 and stream with the right content-type
+     *   - none          → 404
+     */
+    public function productImage(array $p): void
+    {
+        $stmt = db()->prepare(
+            'SELECT image_url FROM product_images WHERE product_id=? ORDER BY is_primary DESC LIMIT 1'
+        );
+        $stmt->execute([(int) ($p['id'] ?? 0)]);
+        self::streamImage($stmt->fetchColumn());
+    }
+
+    /** GET /api/categories/{slug}/thumb — public passthrough for a category image. */
+    public function categoryImage(array $p): void
+    {
+        $stmt = db()->prepare('SELECT image_url FROM categories WHERE slug=? LIMIT 1');
+        $stmt->execute([(string) ($p['slug'] ?? '')]);
+        self::streamImage($stmt->fetchColumn());
+    }
+
+    /**
+     * Serve an image reference as real binary (keeps list/search JSON tiny — heavy
+     * admin-uploaded base64 images live here, cached, not embedded in every response).
+     *   - http(s) URL   → 302 redirect to it
+     *   - data:... URI  → decode base64 and stream with the right content-type
+     *   - none / bad    → 404
+     */
+    private static function streamImage($img): void
+    {
+        if (!$img) {
+            http_response_code(404);
+            exit;
+        }
+        if (preg_match('#^https?://#i', $img)) {
+            header('Location: ' . $img, true, 302);
+            exit;
+        }
+        if (str_starts_with($img, 'data:') && preg_match('#^data:([^;,]*)[^,]*,(.*)$#s', $img, $m)) {
+            $mime = $m[1] !== '' ? $m[1] : 'image/png';
+            $data = base64_decode($m[2], true);
+            if ($data !== false) {
+                header('Content-Type: ' . $mime);
+                header('Cache-Control: public, max-age=604800');
+                header('Content-Length: ' . strlen($data));
+                echo $data;
+                exit;
+            }
+        }
+        http_response_code(404);
+        exit;
+    }
+
+    /** Absolute base URL of this API (e.g. http://host/CloudFashion/backend). */
+    public static function apiBase(): string
+    {
+        $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+        $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '')), '/');
+        return $scheme . '://' . ($_SERVER['HTTP_HOST'] ?? 'localhost') . $dir;
+    }
+
     public function newsletter(array $p): void
     {
         $email = Request::input('email');
@@ -46,11 +111,33 @@ class MiscController
         Response::success(null, 'Message sent. We will get back to you soon.');
     }
 
+    /** GET /api/landing — public, admin-editable copy for the landing hero + story. */
+    public function landing(array $p): void
+    {
+        Response::success([
+            'hero_eyebrow'  => Setting::get('landing_hero_eyebrow', 'Nova Clothing — Est. Elegance'),
+            'hero_title'    => Setting::get('landing_hero_title', "We don't sell clothes."),
+            'hero_accent'   => Setting::get('landing_hero_accent', 'We create confidence.'),
+            'hero_subtitle' => Setting::get('landing_hero_subtitle', 'Editorial fashion, crafted in India — designed to make every moment feel like a statement.'),
+            'hero_cta'      => Setting::get('landing_hero_cta', 'Explore Collection'),
+            'hero_cta_link' => Setting::get('landing_hero_cta_link', '/shop'),
+            'story_quote'   => Setting::get('landing_story_quote', 'Our mission is not to sell clothes. We build confidence through fashion.'),
+            // Editorial imagery (admin-editable URLs; empty -> frontend uses its built-in default).
+            'hero_image'    => Setting::get('landing_img_hero', ''),
+            'intro_image'   => Setting::get('landing_img_intro', ''),
+            'men_image'     => Setting::get('landing_img_men', ''),
+            'women_image'   => Setting::get('landing_img_women', ''),
+            'kids_image'    => Setting::get('landing_img_kids', ''),
+            'newarrival_image' => Setting::get('landing_img_newarrival', ''),
+        ]);
+    }
+
     /** GET /api/store-info — public store config (contact, announcement, socials…). */
     public function storeInfo(array $p): void
     {
         Response::success([
-            'name'              => Setting::get('store_name', 'Cloud Fashion'),
+            'name'              => Setting::get('store_name', 'Nova Clothing'),
+            'logo'              => Setting::get('store_logo', ''),
             'email'             => Setting::get('store_contact_email', 'support@cloudfashion.com'),
             'phone'             => Setting::get('store_contact_phone', '+91 98765 43210'),
             'address'           => Setting::get('store_address', 'Bengaluru, India'),

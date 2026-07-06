@@ -3,7 +3,7 @@ import { NavLink, Outlet, Link, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Package, Tags, ShoppingCart, Users, Ticket, Boxes, BarChart3,
   Image as ImageIcon, Star, Undo2, Gift, Mail, LogOut, Menu, X, Sun, Moon,
-  User, Settings, KeyRound, ChevronDown,
+  User, Settings, KeyRound, ChevronDown, Receipt, UserCog,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useTheme } from '../context/ThemeContext';
@@ -15,6 +15,7 @@ const NAV = [
   ['/admin/products', Package, 'Products'],
   ['/admin/categories', Tags, 'Categories'],
   ['/admin/orders', ShoppingCart, 'Orders'],
+  ['/admin/billing', Receipt, 'Billing'],
   ['/admin/returns', Undo2, 'Returns'],
   ['/admin/inventory', Boxes, 'Inventory'],
   ['/admin/customers', Users, 'Customers'],
@@ -22,6 +23,7 @@ const NAV = [
   ['/admin/banners', ImageIcon, 'Banners'],
   ['/admin/reviews', Star, 'Reviews'],
   ['/admin/loyalty', Gift, 'Loyalty'],
+  ['/admin/cashiers', UserCog, 'Cashiers'],
   ['/admin/messages', Mail, 'Messages'],
   ['/admin/reports', BarChart3, 'Reports'],
 ];

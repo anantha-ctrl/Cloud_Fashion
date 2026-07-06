@@ -5,7 +5,7 @@
  */
 
 // Health check
-$router->get('/', fn() => Response::success(['name' => 'Cloud Fashion API', 'version' => '1.0']));
+$router->get('/', fn() => Response::success(['name' => 'Nova Clothing API', 'version' => '1.0']));
 
 // ---- Auth ----
 $router->post('/api/auth/register',        'AuthController@register');
@@ -23,8 +23,9 @@ $router->put('/api/profile',          'AuthController@updateProfile');
 $router->put('/api/profile/password', 'AuthController@changePassword');
 
 // ---- Categories ----
-$router->get('/api/categories',        'CategoryController@index');
-$router->get('/api/categories/{slug}', 'CategoryController@show');
+$router->get('/api/categories',              'CategoryController@index');
+$router->get('/api/categories/{slug}/thumb', 'MiscController@categoryImage'); // public image passthrough
+$router->get('/api/categories/{slug}',       'CategoryController@show');
 
 // ---- Products ----
 $router->get('/api/products',                 'ProductController@index');
@@ -33,6 +34,7 @@ $router->get('/api/products/trending',        'ProductController@trending');
 $router->get('/api/products/new-arrivals',    'ProductController@newArrivals');
 $router->get('/api/products/best-sellers',    'ProductController@bestSellers');
 $router->get('/api/products/filters',         'ProductController@filters');
+$router->get('/api/products/{id}/thumb',      'MiscController@productImage'); // public image passthrough
 $router->get('/api/products/{slug}',          'ProductController@show');
 $router->get('/api/products/{slug}/related',  'ProductController@related');
 $router->get('/api/products/{slug}/frequently-bought', 'ProductController@frequentlyBought');
@@ -80,6 +82,7 @@ $router->get('/api/loyalty',             'LoyaltyController@index');
 $router->post('/api/newsletter',         'MiscController@newsletter');
 $router->post('/api/contact',            'MiscController@contact');
 $router->get('/api/store-info',          'MiscController@storeInfo');
+$router->get('/api/landing',             'MiscController@landing');
 $router->get('/api/recently-viewed',     'MiscController@recentlyViewed');
 $router->post('/api/recently-viewed',    'MiscController@trackView');
 $router->get('/api/offers',              'MiscController@offers');
@@ -138,9 +141,24 @@ $router->put('/api/admin/loyalty/settings',    'AdminLoyaltyController@saveSetti
 $router->get('/api/admin/loyalty/{id}',        'AdminLoyaltyController@show');
 $router->post('/api/admin/loyalty/{id}/adjust','AdminLoyaltyController@adjust');
 
+// ---- Billing / POS (literal routes before {id}) ----
+$router->get('/api/admin/billing/config',      'AdminBillingController@config');
+$router->get('/api/admin/billing/lookup',      'AdminBillingController@lookup');
+$router->get('/api/admin/billing/products',    'AdminBillingController@products');
+$router->get('/api/admin/billing',             'AdminBillingController@index');
+$router->post('/api/admin/billing',            'AdminBillingController@create');
+$router->put('/api/admin/billing/{id}/void',   'AdminBillingController@void');
+$router->get('/api/admin/billing/{id}',        'AdminBillingController@show');
+
 $router->get('/api/admin/messages',           'AdminContactController@index');
 $router->put('/api/admin/messages/{id}',      'AdminContactController@update');
 $router->delete('/api/admin/messages/{id}',   'AdminContactController@destroy');
+
+// ---- Cashier / staff accounts ----
+$router->get('/api/admin/staff',              'AdminStaffController@index');
+$router->post('/api/admin/staff',             'AdminStaffController@store');
+$router->put('/api/admin/staff/{id}',         'AdminStaffController@update');
+$router->delete('/api/admin/staff/{id}',      'AdminStaffController@destroy');
 
 $router->get('/api/admin/settings',           'AdminSettingsController@index');
 $router->put('/api/admin/settings',           'AdminSettingsController@update');

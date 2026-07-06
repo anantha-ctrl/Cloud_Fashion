@@ -6,21 +6,37 @@ class AdminDashboardController
         Auth::admin();
         $db = db();
 
-        // Revenue counts paid orders only, and never cancelled (refunded) ones.
-        $totalSales = (float) $db->query("SELECT COALESCE(SUM(total),0) FROM orders WHERE payment_status='paid' AND status<>'cancelled'")->fetchColumn();
+        // Revenue = online paid orders + in-store paid bills (counter/POS).
+        $onlineSales  = (float) $db->query("SELECT COALESCE(SUM(total),0) FROM orders WHERE payment_status='paid' AND status<>'cancelled'")->fetchColumn();
+        $counterSales = (float) $db->query("SELECT COALESCE(SUM(total),0) FROM bills WHERE status='paid'")->fetchColumn();
+        $counterBills = (int) $db->query("SELECT COUNT(*) FROM bills WHERE status='paid'")->fetchColumn();
+        $totalSales   = $onlineSales + $counterSales;
         $totalOrders = (int) $db->query('SELECT COUNT(*) FROM orders')->fetchColumn();
         $totalCustomers = (int) $db->query("SELECT COUNT(*) FROM users WHERE role='customer'")->fetchColumn();
         $totalProducts = (int) $db->query('SELECT COUNT(*) FROM products')->fetchColumn();
 
-        // Monthly revenue (last 6 months)
-        $monthly = $db->query(
-            "SELECT DATE_FORMAT(placed_at,'%Y-%m') AS month,
-                    SUM(CASE WHEN payment_status='paid' AND status<>'cancelled' THEN total ELSE 0 END) AS revenue,
-                    COUNT(*) AS orders
-             FROM orders
-             WHERE placed_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH)
-             GROUP BY month ORDER BY month"
-        )->fetchAll();
+        // Monthly revenue (last 6 months) — online orders + counter bills merged,
+        // over a continuous 6-month skeleton so the chart never has gaps.
+        $months = [];
+        for ($i = 5; $i >= 0; $i--) {
+            $k = date('Y-m', strtotime("first day of -$i month"));
+            $months[$k] = ['month' => $k, 'revenue' => 0.0, 'orders' => 0, 'counter' => 0.0];
+        }
+        foreach ($db->query(
+            "SELECT DATE_FORMAT(placed_at,'%Y-%m') AS m,
+                    SUM(CASE WHEN payment_status='paid' AND status<>'cancelled' THEN total ELSE 0 END) AS rev,
+                    COUNT(*) AS ords
+             FROM orders WHERE placed_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH) GROUP BY m"
+        )->fetchAll() as $r) {
+            if (isset($months[$r['m']])) { $months[$r['m']]['revenue'] += (float) $r['rev']; $months[$r['m']]['orders'] += (int) $r['ords']; }
+        }
+        foreach ($db->query(
+            "SELECT DATE_FORMAT(created_at,'%Y-%m') AS m, SUM(CASE WHEN status='paid' THEN total ELSE 0 END) AS rev
+             FROM bills WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 6 MONTH) GROUP BY m"
+        )->fetchAll() as $r) {
+            if (isset($months[$r['m']])) { $months[$r['m']]['revenue'] += (float) $r['rev']; $months[$r['m']]['counter'] += (float) $r['rev']; }
+        }
+        $monthly = array_values($months);
 
         $statusBreakdown = $db->query(
             'SELECT status, COUNT(*) AS count FROM orders GROUP BY status'
@@ -34,26 +50,35 @@ class AdminDashboardController
 
         $lowStock = (int) $db->query('SELECT COUNT(*) FROM products WHERE stock <= low_stock_alert')->fetchColumn();
 
-        // Extra KPIs
-        $todaySales = (float) $db->query(
+        // Extra KPIs — today's revenue also spans both channels.
+        $todayOnline = (float) $db->query(
             "SELECT COALESCE(SUM(total),0) FROM orders WHERE payment_status='paid' AND status<>'cancelled' AND DATE(placed_at)=CURDATE()"
         )->fetchColumn();
+        $todayCounter = (float) $db->query("SELECT COALESCE(SUM(total),0) FROM bills WHERE status='paid' AND DATE(created_at)=CURDATE()")->fetchColumn();
+        $todaySales = $todayOnline + $todayCounter;
         $pendingOrders = (int) $db->query("SELECT COUNT(*) FROM orders WHERE status='pending'")->fetchColumn();
         $paidOrders = (int) $db->query("SELECT COUNT(*) FROM orders WHERE payment_status='paid' AND status<>'cancelled'")->fetchColumn();
-        $avgOrderValue = $paidOrders > 0 ? round($totalSales / $paidOrders, 2) : 0;
+        $avgOrderValue = $paidOrders > 0 ? round($onlineSales / $paidOrders, 2) : 0;
         $newCustomers7d = (int) $db->query(
             "SELECT COUNT(*) FROM users WHERE role='customer' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
         )->fetchColumn();
 
-        // Top selling products (paid orders)
+        // Top selling products — units + revenue across online orders AND counter bills.
         $topProducts = $db->query(
             "SELECT p.id, p.name, p.brand, p.price,
-                    COALESCE(SUM(oi.quantity),0) AS units_sold,
-                    COALESCE(SUM(oi.line_total),0) AS revenue,
+                    COALESCE(SUM(s.units),0) AS units_sold,
+                    COALESCE(SUM(s.rev),0)   AS revenue,
                     (SELECT image_url FROM product_images WHERE product_id=p.id ORDER BY is_primary DESC LIMIT 1) AS image
              FROM products p
-             LEFT JOIN order_items oi ON oi.product_id=p.id
-             LEFT JOIN orders o ON o.id=oi.order_id AND o.payment_status='paid' AND o.status<>'cancelled'
+             JOIN (
+                 SELECT oi.product_id AS pid, SUM(oi.quantity) AS units, SUM(oi.line_total) AS rev
+                   FROM order_items oi JOIN orders o ON o.id=oi.order_id
+                   WHERE o.payment_status='paid' AND o.status<>'cancelled' GROUP BY oi.product_id
+                 UNION ALL
+                 SELECT bi.product_id AS pid, SUM(bi.quantity) AS units, SUM(bi.line_total) AS rev
+                   FROM bill_items bi JOIN bills b ON b.id=bi.bill_id
+                   WHERE b.status='paid' GROUP BY bi.product_id
+             ) s ON s.pid = p.id
              GROUP BY p.id HAVING units_sold > 0 ORDER BY units_sold DESC, revenue DESC LIMIT 5"
         )->fetchAll();
 
@@ -74,6 +99,9 @@ class AdminDashboardController
                 'pending_orders'   => $pendingOrders,
                 'avg_order_value'  => $avgOrderValue,
                 'new_customers_7d' => $newCustomers7d,
+                'online_sales'     => round($onlineSales, 2),
+                'counter_sales'    => round($counterSales, 2),
+                'counter_bills'    => $counterBills,
             ],
             'monthly_sales'    => $monthly,
             'status_breakdown' => $statusBreakdown,

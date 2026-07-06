@@ -4,7 +4,8 @@ import api from '../api/client';
 // Public, store-wide config (announcement bar, socials, contact, shipping…)
 // fetched once at app boot from /api/store-info and shared everywhere.
 const DEFAULTS = {
-  name: 'Cloud Fashion',
+  name: 'Nova Clothing',
+  logo: '',
   email: 'support@cloudfashion.com',
   phone: '+91 98765 43210',
   address: 'Bengaluru, India',

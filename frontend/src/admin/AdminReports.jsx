@@ -110,11 +110,13 @@ export default function AdminReports() {
       {tab === 'sales' && (!sales ? <Spinner /> : (
         <div className="space-y-6">
           {/* KPI cards */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Stat label="Total Revenue" value={inr(sales.total_revenue)} />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Stat label="Total Revenue" value={inr(sales.total_revenue)} hint="Online + counter" />
+            <Stat label="Online Revenue" value={inr(sales.online_revenue)} />
+            <Stat label="Counter Revenue" value={inr(sales.counter_revenue)} hint={`${sales.counter_bills} bill${sales.counter_bills === 1 ? '' : 's'}`} />
+            <Stat label="Items Sold" value={sales.items_sold} />
             <Stat label="Total Orders" value={sales.total_orders} />
             <Stat label="Avg Order Value" value={inr(sales.avg_order_value)} />
-            <Stat label="Items Sold" value={sales.items_sold} />
             <Stat label="New Customers" value={sales.new_customers} />
             <Stat label="Coupons Used" value={sales.coupons_used} />
           </div>
@@ -199,8 +201,12 @@ export default function AdminReports() {
   );
 }
 
-const Stat = ({ label, value }) => (
-  <div className="card p-6"><p className="text-sm text-gray-400">{label}</p><p className="mt-1 text-3xl font-bold">{value}</p></div>
+const Stat = ({ label, value, hint }) => (
+  <div className="card p-6">
+    <p className="text-sm text-gray-400">{label}</p>
+    <p className="mt-1 text-3xl font-bold">{value}</p>
+    {hint && <p className="mt-0.5 text-xs text-gold">{hint}</p>}
+  </div>
 );
 
 const Empty = () => <p className="py-12 text-center text-sm text-gray-400">No data in this range</p>;

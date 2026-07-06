@@ -1,5 +1,5 @@
 -- ============================================================
---  Cloud Fashion - MySQL Schema
+--  Nova Clothing - MySQL Schema
 --  Single Vendor Fashion E-Commerce
 --  Engine: InnoDB  |  Charset: utf8mb4
 -- ============================================================

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Save, Store, Mail, Megaphone, Share2 } from 'lucide-react';
+import { Save, Store, Mail, Megaphone, Share2, Sparkles, Image as ImageIcon, Upload, Receipt } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/client';
 import { Spinner } from '../components/ui';
@@ -7,7 +7,8 @@ import { Spinner } from '../components/ui';
 // [key, label, placeholder, type]
 const SECTIONS = [
   ['Brand', Store, [
-    ['store_name', 'Store name', 'Cloud Fashion', 'text'],
+    ['store_name', 'Store name', 'Nova Clothing', 'text'],
+    ['store_logo', 'Store logo', 'Transparent PNG · wide ~240×80 · shown in header, footer & admin', 'image'],
   ]],
   ['Contact (shown on Contact page)', Mail, [
     ['store_contact_email', 'Contact email', 'support@cloudfashion.com', 'email'],
@@ -26,7 +27,72 @@ const SECTIONS = [
     ['store_twitter', 'Twitter / X URL', 'https://x.com/…', 'text'],
     ['store_whatsapp', 'WhatsApp number (intl, no +)', '919876543210', 'text'],
   ]],
+  ['Homepage — landing hero & story', Sparkles, [
+    ['landing_hero_eyebrow', 'Hero eyebrow (small label)', 'Nova Clothing — Est. Elegance', 'text'],
+    ['landing_hero_title', 'Hero headline — line 1', "We don't sell clothes.", 'text'],
+    ['landing_hero_accent', 'Hero headline — line 2 (gold)', 'We create confidence.', 'text'],
+    ['landing_hero_subtitle', 'Hero subtitle', 'Editorial fashion, crafted in India…', 'textarea'],
+    ['landing_hero_cta', 'Hero button text', 'Explore Collection', 'text'],
+    ['landing_hero_cta_link', 'Hero button link', '/shop', 'text'],
+    ['landing_story_quote', 'Brand-story quote', 'Our mission is not to sell clothes…', 'textarea'],
+  ]],
+  ['Homepage — images (upload or paste URL; empty = default)', ImageIcon, [
+    ['landing_img_hero', 'Hero background image', 'Landscape 16:9 · 1920×1080 · keep subject centred', 'image'],
+    ['landing_img_intro', 'Brand-intro image', 'Portrait 4:5 · 1000×1250', 'image'],
+    ['landing_img_men', 'Men collection image', 'Portrait 4:5 · 1000×1250', 'image'],
+    ['landing_img_women', 'Women collection image', 'Portrait 4:5 · 1000×1250', 'image'],
+    ['landing_img_kids', 'Kids collection image', 'Portrait 4:5 · 1000×1250', 'image'],
+    ['landing_img_newarrival', 'New-arrival banner image', 'Landscape 16:9 · 1920×1080 · keep subject centred', 'image'],
+  ]],
+  ['Billing / POS (in-store invoice)', Receipt, [
+    ['billing_tax_pct', 'Default tax / GST (%)', '0', 'number'],
+    ['billing_invoice_prefix', 'Invoice number prefix', 'INV', 'text'],
+    ['billing_footer_note', 'Invoice footer note', 'Thank you for shopping with Nova Clothing!', 'text'],
+  ]],
 ];
+
+function ImageField({ label, value, onChange, hint }) {
+  const pick = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('Please choose an image file'); return; }
+    if (file.size > 3 * 1024 * 1024) { toast.error('Image too large (max 3 MB)'); return; }
+    const reader = new FileReader();
+    reader.onload = () => onChange(reader.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  return (
+    <div className="block">
+      <span className="text-sm font-medium">{label}</span>
+      {hint && <span className="mt-0.5 block text-xs text-gray-400">Recommended: {hint}</span>}
+      <div className="mt-1 flex items-center gap-3">
+        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-black/10 bg-black/5 dark:border-white/10">
+          {value ? <img src={value} alt="" className="h-full w-full object-cover" />
+                 : <span className="flex h-full w-full items-center justify-center text-gray-300"><ImageIcon size={18} /></span>}
+        </div>
+        <div className="flex-1">
+          <div className="flex gap-2">
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-gold/50 px-3 py-1.5 text-xs font-medium text-gold hover:bg-gold/10">
+              <Upload size={13} /> Upload
+              <input type="file" accept="image/*" hidden onChange={pick} />
+            </label>
+            {value && (
+              <button type="button" onClick={() => onChange('')}
+                className="rounded-lg border border-black/10 px-3 py-1.5 text-xs text-rose-500 hover:bg-rose-500/10 dark:border-white/10">
+                Remove
+              </button>
+            )}
+          </div>
+          <input className="input mt-2 !py-1.5 text-xs" placeholder="…or paste an image URL"
+            value={value?.startsWith('data:') ? '' : (value || '')}
+            onChange={(e) => onChange(e.target.value)} />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function AdminSettings() {
   const [form, setForm] = useState(null);
@@ -59,14 +125,24 @@ export default function AdminSettings() {
                 <Icon size={18} />
                 <h2 className="font-semibold">{title}</h2>
               </div>
-              {fields.map(([key, label, ph, type]) => (
-                <label key={key} className="block">
-                  <span className="text-sm font-medium">{label}</span>
-                  <input type={type === 'email' ? 'email' : type === 'number' ? 'number' : 'text'}
-                    min={type === 'number' ? '0' : undefined} className="input mt-1" placeholder={ph}
-                    value={form[key] ?? ''} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
-                </label>
-              ))}
+              {fields.map(([key, label, ph, type]) =>
+                type === 'image' ? (
+                  <ImageField key={key} label={label} hint={ph} value={form[key] ?? ''}
+                    onChange={(v) => setForm({ ...form, [key]: v })} />
+                ) : (
+                  <label key={key} className="block">
+                    <span className="text-sm font-medium">{label}</span>
+                    {type === 'textarea' ? (
+                      <textarea rows={2} className="input mt-1" placeholder={ph}
+                        value={form[key] ?? ''} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+                    ) : (
+                      <input type={type === 'email' ? 'email' : type === 'number' ? 'number' : 'text'}
+                        min={type === 'number' ? '0' : undefined} className="input mt-1" placeholder={ph}
+                        value={form[key] ?? ''} onChange={(e) => setForm({ ...form, [key]: e.target.value })} />
+                    )}
+                  </label>
+                )
+              )}
             </div>
           ))}
         </div>

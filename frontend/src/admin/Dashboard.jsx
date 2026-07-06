@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import {
   IndianRupee, ShoppingCart, Users, Package, AlertTriangle, RefreshCw,
-  TrendingUp, Clock, UserPlus, Receipt,
+  TrendingUp, Clock, UserPlus, Receipt, Globe, Store,
 } from 'lucide-react';
 import api from '../api/client';
 import { inr, dateFmt, timeAgo, statusColor } from '../utils/format';
@@ -63,6 +63,15 @@ export default function Dashboard() {
           to={cards.pending_orders > 0 ? '/admin/orders' : undefined} />
         <Card icon={Receipt} label="Avg Order Value" value={inr(cards.avg_order_value)} accent="text-blue-500" />
         <Card icon={UserPlus} label="New Customers (7d)" value={cards.new_customers_7d} accent="text-indigo-500" />
+      </div>
+
+      {/* Sales by channel — online storefront vs in-store billing counter */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card icon={Globe} label="Online Sales" value={inr(cards.online_sales)} accent="text-cyan-500" />
+        <Card icon={Store} label="Counter Sales" value={inr(cards.counter_sales)} accent="text-gold"
+          to="/admin/billing" />
+        <Card icon={Receipt} label="Counter Bills" value={cards.counter_bills ?? 0} accent="text-emerald-500"
+          to="/admin/billing" />
       </div>
 
       {cards.low_stock > 0 && (

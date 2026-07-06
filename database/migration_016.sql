@@ -3,7 +3,7 @@
 --   from the DB instead of hardcoded values.
 
 INSERT INTO settings (`key`, `value`) VALUES
-  ('store_name',              'Cloud Fashion'),
+  ('store_name',              'Nova Clothing'),
   ('store_announcement',      'FREE SHIPPING OVER ₹1999 · EASY 7-DAY RETURNS · USE CODE WELCOME10'),
   ('store_free_shipping_min', '1999'),
   ('store_base_shipping',     '79'),

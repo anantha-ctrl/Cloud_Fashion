@@ -1,4 +1,4 @@
-# ☁️ Cloud Fashion
+# ☁️ Nova Clothing
 
 A complete, production-ready **single-vendor fashion e-commerce** web application with a premium, luxury UI — featuring a glassmorphism design, dark/light mode, full customer storefront, and a powerful admin dashboard.
 
@@ -42,7 +42,8 @@ flowchart TB
 
 ### Customer
 - **Auth** — Register, Login, Logout, **real Email OTP verification** (live Gmail SMTP), **Google Sign-In** (OAuth — find-or-create user), Forgot/Reset password (JWT-based, **7-day sliding sessions** that refresh on activity and stay logged in until manual logout)
-- **Home** — Hero slider, featured categories (**live category images**), new arrivals, trending, best sellers, **admin-managed promo banners**, live **offers strip**, **"Shop the Sale"** → on-sale filter
+- **Premium landing page** (`/`) — editorial, luxury storytelling built with Framer Motion + Lenis smooth-scroll: a **3D coverflow hero carousel** (admin banners), auto-sliding **category / featured-collection / "styled by you"** carousels (all live from the DB), brand-story scroll reveal, admin-editable hero & story copy + imagery, dark/light toggle, profile dropdown
+- **Home** (`/home`) — Hero slider, featured categories (**live category images**), new arrivals, trending, best sellers, **admin-managed promo banners**, live **offers strip**, **"Shop the Sale"** → on-sale filter
 - **Catalog** — Search, **dynamic facet filters** built from live DB data (category, brand, size, **color swatches**, price range), sort (price/popularity/newest/rating/**discount**), **on-sale** filter, pagination
 - **Product page** — Image gallery with **zoom**, **Quick View** side drawer, specs, variants (size/color), **size-guide modal**, stock, **reviews & ratings with rating breakdown**, **frequently-bought-together**, related products, **share buttons**, **"notify me when back in stock"**
 - **Reviews 2.0** — Verified buyers can review **after delivery**; star rating + title + comment, per-product rating breakdown bars
@@ -61,8 +62,10 @@ flowchart TB
 - **Responsive** + **Dark/Light mode** + smooth Framer Motion animations + **PWA manifest**
 
 ### Admin
-- **Dashboard** — 8 KPI cards (today's sales, pending orders, avg order value, new customers…), revenue chart, color-coded order-status chart, top products & recent customers widgets, manual **Refresh**
-  - **Revenue excludes cancelled orders** (only `paid` & non-cancelled count toward sales)
+- **Dashboard** — KPI cards (today's sales, pending orders, avg order value, new customers…), a **sales-by-channel** row (online vs in-store counter), revenue chart, color-coded order-status chart, top products & recent customers widgets, manual **Refresh**
+  - **Combined revenue** — online orders **+** in-store billing counter sales; cancelled orders excluded (only `paid` & non-cancelled count)
+- **Billing / POS** — in-store checkout counter: live product search + **QR/barcode scan**, cart with per-order discount (₹ or %) and configurable **tax/GST**, cash/UPI/card/other payment with change calc, optional customer (earns loyalty), **printable thermal invoice**, bill **history + void & restock**; every sale decrements the same live stock as online orders
+- **Cashiers** — create billing-counter staff logins (`cashier` role) that can access **only** the billing screen; block/unblock, reset password, per-cashier sales totals
 - **Notifications** — Bell with live alerts, **mark read/unread**, **delete**, **mark-all-read**
 - **Products** — Full CRUD, multiple images (Cloudinary or inline base64), variants, specifications, **bulk CSV import** (auto-creates categories)
 - **Categories** (clean auto-slugs), **Coupons** (percentage/fixed, min order, expiry, usage limit, **first-order-only**, **edit** support)
@@ -76,7 +79,9 @@ flowchart TB
 - **Loyalty** — Per-customer point balances, KPIs (issued/redeemed/outstanding), transaction history, **manual credit/deduct**, and editable **program rules** (earn rate, per-order cap, ₹ per point, redeem cap, signup & referral bonuses)
 - **Messages** — Inbox for Contact Us submissions with unread badge, mark read/unread, one-click email reply
 - **Store Settings** — Edit store name, public contact details, message inbox, **announcement bar**, **free-shipping threshold + flat fee**, **social links & WhatsApp** — all live on the storefront in real time
-- **Reports** — Date-range filter + presets, 6 KPI cards, charts (daily revenue, orders by status, revenue by category, payment methods), CSV export, **Refresh** (all revenue excludes cancelled)
+- **Reports** — Date-range filter + presets, KPI cards (incl. **online vs counter revenue**), charts (daily revenue, orders by status, revenue by category, payment methods) — **all combine online + in-store billing** — CSV export, **Refresh** (revenue excludes cancelled)
+- **Product QR labels** — generate & print a scannable QR sticker per product (encodes the product URL); scanned at the billing counter to add the item instantly
+- **Store Settings → Brand** — upload a **store logo** + edit the store name; both go live everywhere (header, footer, admin, emails, invoices) in real time
 - **Account dropdown** (Profile / Settings / Change Password / Logout), **static/sticky sidebar**, brand logo across all pages
 
 ---
@@ -87,7 +92,7 @@ flowchart TB
 CloudFashion/
 ├── database/
 │   ├── cloudfashion.sql          # Full schema + seed data
-│   └── migration_002…016.sql     # Incremental schema updates (see Migrations)
+│   └── migration_002…021.sql     # Incremental schema updates (see Migrations)
 ├── backend/                      # PHP API (front-controller, no Composer needed)
 │   ├── bootstrap.php             # Loads env, core, autoloader
 │   ├── index.php                 # Router + CORS
@@ -117,9 +122,11 @@ CloudFashion/
 
 **Added by migrations:**
 `banners`, `stock_notifications`, `notification_states`, `returns`,
-`loyalty_transactions`, `settings`, `contact_messages` — plus new columns
+`loyalty_transactions`, `settings`, `contact_messages`, **`bills`, `bill_items`**
+(in-store billing/POS) — plus new columns
 (`reviews.is_hidden`; `users.loyalty_points/referral_code/referred_by`;
-`orders.points_used/points_earned`; `orders.status` `returned` state).
+`orders.points_used/points_earned`; `orders.status` `returned` state;
+**`users.role` gains `cashier`**).
 
 ### Entity-Relationship Diagram
 
@@ -157,7 +164,7 @@ erDiagram
     users {
         bigint id PK
         string email
-        string role "customer | admin"
+        string role "customer | admin | cashier"
     }
     products {
         bigint id PK
@@ -209,6 +216,11 @@ erDiagram
 | `migration_014.sql` | `contact_messages` table (Contact Us inbox) |
 | `migration_015.sql` | Store contact settings (email, phone, address, inbox) |
 | `migration_016.sql` | Store settings: name, announcement, free-shipping threshold, socials, WhatsApp |
+| `migration_017.sql` | Landing hero + brand-story copy settings (admin-editable) |
+| `migration_018.sql` | Landing image settings (hero / collections / new-arrival) |
+| `migration_019.sql` | Widen `settings.value` to `MEDIUMTEXT` (inline base64 logo/images) |
+| `migration_020.sql` | **Billing / POS** — `bills` + `bill_items` tables + billing settings (tax %, invoice prefix, footer) |
+| `migration_021.sql` | **Cashier role** — `users.role` gains `cashier` (billing-counter staff) |
 
 ```bash
 # apply every migration in order (phpMyAdmin or CLI)
@@ -322,16 +334,25 @@ POST   /api/orders/cod               POST   /api/orders/{id}/reorder
 GET    /api/orders                   PUT    /api/orders/{id}/cancel
 POST   /api/orders/{id}/return
 
+GET    /api/categories/{slug}/thumb  GET    /api/products/{id}/thumb   (cached image passthrough)
+
 # admin (Authorization: Bearer <admin jwt>)
 GET    /api/admin/dashboard          GET    /api/admin/notifications
 POST   /api/admin/products           POST   /api/admin/products/import   (bulk CSV)
 PUT    /api/admin/orders/{id}/status (carrier + tracking, emails customer)
-GET    /api/admin/reports/sales?from=&to=
+GET    /api/admin/reports/sales?from=&to=   (online + counter combined)
 CRUD   /api/admin/banners            CRUD   /api/admin/coupons
 GET/PUT/DELETE /api/admin/reviews    GET/PUT /api/admin/returns
 GET    /api/admin/loyalty            PUT    /api/admin/loyalty/settings
 POST   /api/admin/loyalty/{id}/adjust
 GET/PUT/DELETE /api/admin/messages   GET/PUT /api/admin/settings
+CRUD   /api/admin/staff              (cashier accounts)
+
+# billing / POS  (Authorization: Bearer <admin OR cashier jwt>)
+GET    /api/admin/billing/config     GET    /api/admin/billing/products?q=
+GET    /api/admin/billing/lookup?code=   (resolve scanned QR/barcode)
+GET    /api/admin/billing            POST   /api/admin/billing         (create bill)
+GET    /api/admin/billing/{id}       PUT    /api/admin/billing/{id}/void
 ```
 
 ---
@@ -426,7 +447,16 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** for production deployment.
 
 ## 🆕 What's New (post-launch updates)
 
-### Latest wave — engagement, retention & store control
+### Latest wave — in-store billing, cashiers & a premium landing page
+- **Billing / POS counter** — a full in-store checkout: live product search + **QR/barcode scan**, discount (₹/%), configurable **tax/GST**, cash/UPI/card payment with change, optional customer (earns loyalty), **printable invoice**, and bill **history + void & restock**. Sales decrement the **same live inventory** as online orders.
+- **Cashier role** — admin creates billing-counter logins that can reach **only** the POS screen; per-cashier sales, block/unblock, password reset.
+- **Dashboard & Reports now combine channels** — every revenue figure, chart, top-product and category breakdown merges **online orders + in-store bills**; new online-vs-counter KPIs.
+- **Product QR labels** — generate & print a scannable QR per product for the counter scanner.
+- **Premium landing page** (`/`) — Awwwards-style editorial experience: **3D coverflow hero** (admin banners) + auto-sliding **category / featured / styled-by-you** carousels, all live from the DB; admin-editable hero & story copy + imagery; dark/light + profile dropdown.
+- **Brand control** — store renamed to **Nova Clothing**; upload a **store logo** from Admin → Settings → Brand and it goes live everywhere (header, footer, admin, emails, invoices) in real time.
+- **Lighter media** — category & product images stream through a **cached passthrough endpoint** instead of shipping multi-MB base64 in list responses.
+
+### Earlier wave — engagement, retention & store control
 - **Loyalty & Referrals** — earn points per order (admin-set rate + **per-order cap**), **redeem at checkout** with a configurable **₹ value per point**, unique **referral codes** (signup + one-time referral bonus), customer **Rewards** tab, and an admin **Loyalty** console (balances, KPIs, history, manual adjust, editable rules)
 - **Returns & Refunds (RMA)** — request returns on delivered orders; admin approve/reject → auto-restock + refund status + customer email
 - **Reviews 2.0** — verified **post-delivery** reviews, rating breakdown, admin **moderation** (hide/delete with live rating recalc)
@@ -463,4 +493,4 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** for production deployment.
 ---
 
 ## 📄 License
-MIT — built as a complete reference implementation for Cloud Fashion.
+MIT — built as a complete reference implementation for Nova Clothing.

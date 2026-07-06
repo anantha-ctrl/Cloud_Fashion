@@ -53,7 +53,7 @@ class AdminOrderController
         if ($row = $info->fetch()) {
             Mailer::send(
                 $row['email'],
-                "Cloud Fashion · Order {$row['order_number']} update",
+                Mailer::brand() . " · Order {$row['order_number']} update",
                 Mailer::orderStatusTemplate($row['name'], $row['order_number'], $status, $row['carrier'], $row['tracking_number'])
             );
         }

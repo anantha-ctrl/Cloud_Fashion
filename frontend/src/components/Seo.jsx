@@ -1,12 +1,14 @@
 import { Helmet } from 'react-helmet-async';
+import { useStore } from '../context/StoreContext';
 
-const SITE = 'Cloud Fashion';
 const DEFAULT_DESC = 'Premium fashion, curated for the modern wardrobe. Shop menswear, womenswear, kids, footwear & accessories.';
 
 /**
  * Per-page SEO: title, description, and Open Graph / Twitter tags.
+ * The site/brand name is the live, admin-editable store name.
  */
 export default function Seo({ title, description = DEFAULT_DESC, image, type = 'website' }) {
+  const { name: SITE } = useStore();
   const fullTitle = title ? `${title} — ${SITE}` : `${SITE} — Premium Fashion Store`;
   return (
     <Helmet>

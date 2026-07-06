@@ -1,8 +1,11 @@
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export default function ProtectedRoute({ children, adminOnly = false }) {
-  const { user, loading, isAdmin } = useAuth();
+// Where each role belongs when it lands somewhere it isn't allowed.
+const homeFor = (role) => (role === 'admin' ? '/admin' : role === 'cashier' ? '/cashier' : '/');
+
+export default function ProtectedRoute({ children, adminOnly = false, roles = null }) {
+  const { user, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -13,6 +16,10 @@ export default function ProtectedRoute({ children, adminOnly = false }) {
     );
   }
   if (!user) return <Navigate to="/login" state={{ from: location }} replace />;
-  if (adminOnly && !isAdmin) return <Navigate to="/" replace />;
+
+  const allowed = roles || (adminOnly ? ['admin'] : null);
+  if (allowed && !allowed.includes(user.role)) {
+    return <Navigate to={homeFor(user.role)} replace />;
+  }
   return children;
 }
