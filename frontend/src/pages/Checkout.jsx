@@ -30,9 +30,9 @@ export default function Checkout() {
   useEffect(() => {
     if (!cart.items.length) navigate('/cart');
     loadAddresses();
-    api.get('/api/offers').then((r) => setOffers(r.data.data)).catch(() => {});
-    api.get('/api/shipping-info').then((r) => setShipInfo(r.data.data)).catch(() => {});
-    api.get('/api/loyalty').then((r) => setLoyalty(r.data.data)).catch(() => {});
+    api.get('/api/offers').then((r) => setOffers(r.data.data)).catch(() => { });
+    api.get('/api/shipping-info').then((r) => setShipInfo(r.data.data)).catch(() => { });
+    api.get('/api/loyalty').then((r) => setLoyalty(r.data.data)).catch(() => { });
   }, []);
 
   const loadAddresses = async () => {
@@ -139,7 +139,7 @@ export default function Checkout() {
         key: order.razorpay_key,
         amount: order.amount,
         currency: order.currency,
-        name: 'Nova Clothing',
+        name: 'Novo Clothing',
         image: `${window.location.origin}/logo.png`,
         description: `Order ${order.order_number}`,
         order_id: order.razorpay_order_id,

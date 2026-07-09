@@ -109,26 +109,13 @@ class AuthController
             $db->prepare('UPDATE users SET name=?, password_hash=? WHERE id=?')
                ->execute([$data['name'], password_hash($data['password'], PASSWORD_BCRYPT), $userId]);
         } else {
-            // Optional referral code: credit the new customer a signup bonus and
-            // remember who referred them (the referrer is rewarded on first order).
-            $referrerId = null;
-            if (!empty($data['referral_code'])) {
-                $ref = $db->prepare('SELECT id FROM users WHERE referral_code=?');
-                $ref->execute([strtoupper(trim($data['referral_code']))]);
-                $referrerId = $ref->fetchColumn() ?: null;
-            }
-
-            $stmt = $db->prepare('INSERT INTO users (name, email, phone, password_hash, referral_code, referred_by) VALUES (?,?,?,?,?,?)');
+            $stmt = $db->prepare('INSERT INTO users (name, email, phone, password_hash, referral_code) VALUES (?,?,?,?,?)');
             $stmt->execute([
                 $data['name'], $data['email'], $data['phone'] ?? null,
                 password_hash($data['password'], PASSWORD_BCRYPT),
-                LoyaltyController::makeReferralCode($db), $referrerId ?: null,
+                LoyaltyController::makeReferralCode($db),
             ]);
             $userId = (int) $db->lastInsertId();
-
-            if ($referrerId) {
-                LoyaltyController::award($db, $userId, LoyaltyController::config()['loyalty_signup_bonus'], 'signup', null, 'Welcome bonus (referral)');
-            }
         }
 
         $this->issueOtp($userId, $data['name'], $data['email']);

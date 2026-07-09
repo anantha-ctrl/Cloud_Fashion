@@ -78,6 +78,48 @@ export default function AdminProducts() {
       price: p.price, mrp: p.mrp, stock: p.stock, sold: p.sold_count, active: p.is_active ? 'yes' : 'no',
     })));
 
+  // Generate every product's QR onto ONE printable sheet — no downloading one
+  // label at a time. `list` = the products to label (all filtered, or selected).
+  const printQrLabels = async (list) => {
+    if (!list.length) { toast.error('No products to label'); return; }
+    const t = toast.loading(`Generating ${list.length} QR label(s)…`);
+    try {
+      const labels = await Promise.all(list.map(async (p) => ({
+        ...p,
+        dataUrl: await QRCode.toDataURL(`${window.location.origin}/product/${p.slug}`,
+          { width: 320, margin: 1, errorCorrectionLevel: 'M' }),
+      })));
+      const w = window.open('', '_blank', 'width=900,height=1000');
+      if (!w) { toast.error('Allow pop-ups to print'); return; }
+      const cards = labels.map((p) => `
+        <div class="label">
+          <img src="${p.dataUrl}" alt="QR">
+          <div class="name">${escapeHtml(p.name)}</div>
+          <div class="price">${escapeHtml(inr(p.price))}</div>
+          <div class="slug">${escapeHtml(p.slug)}</div>
+        </div>`).join('');
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>QR Labels (${labels.length})</title>
+        <style>
+          *{font-family:'Segoe UI',Arial,sans-serif;box-sizing:border-box}
+          body{margin:0;padding:12px}
+          .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+          .label{text-align:center;border:1px solid #ddd;border-radius:10px;padding:12px;page-break-inside:avoid}
+          img{width:150px;height:150px}
+          .name{font-weight:700;font-size:12px;margin:6px 0 2px;line-height:1.2}
+          .price{color:#8a6d1f;font-weight:700;font-size:13px}
+          .slug{color:#999;font-size:9px;margin-top:3px;word-break:break-all}
+          @media print{@page{margin:10mm}}
+        </style></head><body onload="window.print()">
+        <div class="grid">${cards}</div>
+        </body></html>`);
+      w.document.close();
+    } catch {
+      toast.error('Could not generate QR labels');
+    } finally {
+      toast.dismiss(t);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -91,6 +133,9 @@ export default function AdminProducts() {
             <Upload size={16} /> {importing ? 'Importing…' : 'Bulk Upload'}
           </button>
           <button onClick={doExport} className="btn-outline !py-2 text-sm"><Download size={16} /> Export</button>
+          <button onClick={() => printQrLabels(filtered)} className="btn-outline !py-2 text-sm" title="Print QR labels for all products">
+            <QrCode size={16} /> QR Labels
+          </button>
           <Link to="/admin/products/new" className="btn-gold !py-2 text-sm"><Plus size={16} /> Add Product</Link>
         </div>
       </div>
@@ -108,6 +153,7 @@ export default function AdminProducts() {
           <span className="font-medium">{selected.length} selected</span>
           <button onClick={() => bulk('activate')} className="flex items-center gap-1 rounded-lg px-3 py-1.5 hover:bg-gold/15"><Eye size={14} /> Activate</button>
           <button onClick={() => bulk('deactivate')} className="flex items-center gap-1 rounded-lg px-3 py-1.5 hover:bg-gold/15"><EyeOff size={14} /> Hide</button>
+          <button onClick={() => printQrLabels(products.filter((p) => selected.includes(p.id)))} className="flex items-center gap-1 rounded-lg px-3 py-1.5 hover:bg-gold/15"><QrCode size={14} /> QR Labels</button>
           <button onClick={() => bulk('delete')} className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-rose-500 hover:bg-rose-500/10"><Trash2 size={14} /> Delete</button>
           <button onClick={() => setSelected([])} className="ml-auto text-gray-400 hover:text-gold">Clear</button>
         </div>
@@ -160,6 +206,7 @@ export default function AdminProducts() {
 /** Generates a scannable QR label (encodes the product URL) for the in-store billing scanner. */
 function QrLabelModal({ product, onClose }) {
   const [dataUrl, setDataUrl] = useState('');
+  const [copies, setCopies] = useState(1); // how many identical labels to print
   const value = `${window.location.origin}/product/${product.slug}`;
 
   useEffect(() => {
@@ -170,24 +217,34 @@ function QrLabelModal({ product, onClose }) {
 
   const printLabel = () => {
     if (!dataUrl) return;
-    const w = window.open('', '_blank', 'width=380,height=460');
+    const n = Math.max(1, Math.min(500, Number(copies) || 1)); // clamp 1–500
+    const w = window.open('', '_blank', 'width=900,height=1000');
     if (!w) { toast.error('Allow pop-ups to print'); return; }
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${product.name}</title>
-      <style>
-        *{font-family:'Segoe UI',Arial,sans-serif;box-sizing:border-box}
-        body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh}
-        .label{width:280px;text-align:center;border:1px solid #ddd;border-radius:10px;padding:16px}
-        img{width:200px;height:200px}
-        .name{font-weight:700;font-size:15px;margin:8px 0 2px}
-        .price{color:#8a6d1f;font-weight:700;font-size:16px}
-        .slug{color:#999;font-size:10px;margin-top:4px;word-break:break-all}
-      </style></head><body onload="window.print()">
+    const card = `
       <div class="label">
         <img src="${dataUrl}" alt="QR">
         <div class="name">${escapeHtml(product.name)}</div>
-        <div class="price">${inr(product.price)}</div>
+        <div class="price">${escapeHtml(inr(product.price))}</div>
         <div class="slug">${escapeHtml(product.slug)}</div>
-      </div></body></html>`);
+      </div>`;
+    const cards = Array.from({ length: n }, () => card).join('');
+    // Single copy prints centred; multiple copies tile onto one printable sheet.
+    const layout = n === 1
+      ? 'body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh}'
+      : 'body{margin:0;padding:12px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}';
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(product.name)} — ${n} label(s)</title>
+      <style>
+        *{font-family:'Segoe UI',Arial,sans-serif;box-sizing:border-box}
+        ${layout}
+        .label{text-align:center;border:1px solid #ddd;border-radius:10px;padding:12px;page-break-inside:avoid;${n === 1 ? 'width:280px' : ''}}
+        img{width:${n === 1 ? 200 : 150}px;height:${n === 1 ? 200 : 150}px}
+        .name{font-weight:700;font-size:${n === 1 ? 15 : 12}px;margin:6px 0 2px;line-height:1.2}
+        .price{color:#8a6d1f;font-weight:700;font-size:${n === 1 ? 16 : 13}px}
+        .slug{color:#999;font-size:${n === 1 ? 10 : 9}px;margin-top:3px;word-break:break-all}
+        @media print{@page{margin:10mm}}
+      </style></head><body onload="window.print()">
+      ${n === 1 ? cards : `<div class="grid">${cards}</div>`}
+      </body></html>`);
     w.document.close();
   };
 
@@ -214,10 +271,20 @@ function QrLabelModal({ product, onClose }) {
           <p className="mt-3 font-medium">{product.name}</p>
           <p className="text-sm font-semibold text-gold">{inr(product.price)}</p>
           <p className="mt-1 break-all text-[11px] text-gray-400">Scans to add this product at billing.</p>
+
+          {/* How many identical labels to print (e.g. one per physical item). */}
+          <div className="mt-4 flex items-center justify-center gap-2">
+            <label className="text-sm text-gray-500 dark:text-gray-300">Copies to print</label>
+            <input type="number" min="1" max="500" value={copies}
+              onChange={(e) => setCopies(e.target.value)}
+              className="input !h-9 !w-20 !py-0 text-center text-sm" />
+          </div>
         </div>
         <div className="flex gap-2 border-t border-black/5 p-4 dark:border-white/10">
-          <button onClick={printLabel} disabled={!dataUrl} className="btn-gold flex-1 justify-center disabled:opacity-50"><Printer size={16} /> Print</button>
-          <button onClick={downloadPng} disabled={!dataUrl} className="rounded-xl border border-black/10 px-4 text-sm disabled:opacity-50 dark:border-white/10"><Download size={16} /></button>
+          <button onClick={printLabel} disabled={!dataUrl} className="btn-gold flex-1 justify-center disabled:opacity-50">
+            <Printer size={16} /> Print {Math.max(1, Math.min(500, Number(copies) || 1))}
+          </button>
+          <button onClick={downloadPng} disabled={!dataUrl} className="rounded-xl border border-black/10 px-4 text-sm disabled:opacity-50 dark:border-white/10" title="Download PNG"><Download size={16} /></button>
         </div>
       </div>
     </div>

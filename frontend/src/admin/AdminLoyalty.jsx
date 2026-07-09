@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Gift, Search, Users, Coins, TrendingDown, X, Plus, Minus, Settings, Save } from 'lucide-react';
+import { Gift, Search, Coins, TrendingDown, X, Plus, Minus, Settings, Save } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/client';
 import { Spinner, Empty } from '../components/ui';
@@ -9,8 +9,6 @@ const RULE_FIELDS = [
   ['loyalty_earn_cap',       'Max points / order', 'Cap on points earned per order (single or bulk)', 'pts', 1],
   ['loyalty_point_value',    'Point value', 'Rupee value of 1 point (e.g. 0.5 = 2 pts per ₹1)', '₹', 0.05],
   ['loyalty_redeem_cap_pct', 'Redeem cap', 'Max share of an order payable with points', '%', 1],
-  ['loyalty_signup_bonus',   'Signup bonus', 'Points for joining via a referral code', 'pts', 1],
-  ['loyalty_referral_bonus', 'Referral bonus', "Reward when a referred friend's first order ships", 'pts', 1],
 ];
 
 function RulesPanel({ settings, onSaved }) {
@@ -87,12 +85,12 @@ export default function AdminLoyalty() {
   if (!data) return <Spinner />;
   const { customers, stats, settings } = data;
   const shown = customers.filter((c) =>
-    `${c.name} ${c.email} ${c.referral_code || ''}`.toLowerCase().includes(q.toLowerCase()));
+    `${c.name} ${c.email}`.toLowerCase().includes(q.toLowerCase()));
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="font-display text-2xl font-bold">Loyalty &amp; Referrals</h1>
+        <h1 className="font-display text-2xl font-bold">Loyalty</h1>
         <p className="text-xs text-gray-400">
           Earn {settings.loyalty_earn_rate_pct}% (max {settings.loyalty_earn_cap} pts/order) · Redeem up to {settings.loyalty_redeem_cap_pct}%
         </p>
@@ -102,30 +100,27 @@ export default function AdminLoyalty() {
       <RulesPanel settings={settings} onSaved={(s) => setData((d) => ({ ...d, settings: s }))} />
 
       {/* KPIs */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-3">
         <Stat icon={Coins} label="Points issued" value={stats.issued?.toLocaleString()} tint="bg-emerald-500/10 text-emerald-600" />
         <Stat icon={TrendingDown} label="Points redeemed" value={stats.redeemed?.toLocaleString()} tint="bg-rose-500/10 text-rose-500" />
         <Stat icon={Gift} label="Outstanding balance" value={stats.outstanding?.toLocaleString()} tint="bg-amber-500/10 text-amber-600" />
-        <Stat icon={Users} label="Referral rewards" value={stats.referral_points?.toLocaleString()} tint="bg-violet-500/10 text-violet-600" />
       </div>
 
       {/* search */}
       <div className="relative max-w-sm">
         <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name, email or code…"
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search name or email…"
           className="input pl-9" />
       </div>
 
       {shown.length === 0 ? (
-        <Empty icon={Gift} title="No customers" subtitle="Customer points and referrals will show up here." />
+        <Empty icon={Gift} title="No customers" subtitle="Customer points will show up here." />
       ) : (
         <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="border-b border-black/5 text-left text-xs uppercase text-gray-400 dark:border-white/10">
               <tr>
                 <th className="px-4 py-3">Customer</th>
-                <th className="px-4 py-3">Referral code</th>
-                <th className="px-4 py-3 text-center">Referred</th>
                 <th className="px-4 py-3 text-right">Earned</th>
                 <th className="px-4 py-3 text-right">Redeemed</th>
                 <th className="px-4 py-3 text-right">Balance</th>
@@ -139,8 +134,6 @@ export default function AdminLoyalty() {
                     <p className="font-medium">{c.name}</p>
                     <p className="text-xs text-gray-400">{c.email}</p>
                   </td>
-                  <td className="px-4 py-3 font-mono text-xs">{c.referral_code || '—'}</td>
-                  <td className="px-4 py-3 text-center">{c.referred_count}</td>
                   <td className="px-4 py-3 text-right text-emerald-600">+{c.total_earned}</td>
                   <td className="px-4 py-3 text-right text-rose-500">-{c.total_redeemed}</td>
                   <td className="px-4 py-3 text-right font-bold">{c.loyalty_points}</td>
@@ -221,18 +214,6 @@ function CustomerDrawer({ customer, onClose, onChanged }) {
             </button>
           </div>
         </div>
-
-        {/* referrals */}
-        {detail?.referrals?.length > 0 && (
-          <div className="mt-6">
-            <p className="text-sm font-semibold">Referred {detail.referrals.length} friend(s)</p>
-            <ul className="mt-2 space-y-1 text-xs text-gray-500 dark:text-gray-300">
-              {detail.referrals.map((r) => (
-                <li key={r.id} className="flex justify-between"><span>{r.name}</span><span className="text-gray-400">{new Date(r.created_at).toLocaleDateString()}</span></li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         {/* history */}
         <div className="mt-6">

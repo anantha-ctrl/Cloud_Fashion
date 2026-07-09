@@ -83,8 +83,8 @@ export default function Shop() {
 
   const title = onSale ? 'Sale'
     : slug
-    ? (categoryName || slug.replace(/-[a-z0-9]{4}$/i, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
-    : search ? `Results for "${search}"` : 'All Products';
+      ? (categoryName || slug.replace(/-[a-z0-9]{4}$/i, '').replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
+      : search ? `Results for "${search}"` : 'All Products';
   const eyebrow = onSale ? 'Limited Offer' : 'Collection';
 
   const FilterPanel = (
@@ -128,7 +128,7 @@ export default function Shop() {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10">
-      <Seo title={title} description={`Shop ${title} at Nova Clothing. ${pagination?.total ?? ''} curated styles with filters for size, colour, brand and price.`} />
+      <Seo title={title} description={`Shop ${title} at Novo Clothing. ${pagination?.total ?? ''} curated styles with filters for size, colour, brand and price.`} />
       <SectionTitle eyebrow={eyebrow} title={title} />
 
       <div className="mb-6 flex items-center justify-between gap-3">

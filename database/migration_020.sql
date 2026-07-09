@@ -49,5 +49,5 @@ CREATE TABLE IF NOT EXISTS bill_items (
 INSERT INTO settings (`key`, `value`) VALUES
     ('billing_tax_pct',        '0'),
     ('billing_invoice_prefix', 'INV'),
-    ('billing_footer_note',    'Thank you for shopping with Nova Clothing!')
+    ('billing_footer_note',    'Thank you for shopping with Novo Clothing!')
 ON DUPLICATE KEY UPDATE `key` = `key`;

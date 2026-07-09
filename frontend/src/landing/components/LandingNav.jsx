@@ -6,15 +6,8 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { useAuth } from '../../context/AuthContext';
 import { useTheme } from '../../context/ThemeContext';
+import api from '../../api/client';
 import Logo from '../../components/Logo';
-
-const LINKS = [
-  ['Collections', '/shop'],
-  ['Men', '/category/men'],
-  ['Women', '/category/women'],
-  ['Kids', '/category/kids'],
-  ['Accessories', '/category/accessories'],
-];
 
 export default function LandingNav() {
   const [solid, setSolid] = useState(false);
@@ -28,6 +21,12 @@ export default function LandingNav() {
   const [acc, setAcc] = useState(false);
   const accRef = useRef(null);
 
+  // Nav links are driven live from the DB categories (respects the storefront
+  // scope, e.g. a men-only store) — "Collections" always leads the list.
+  const [cats, setCats] = useState([]);
+  useEffect(() => { api.get('/api/categories').then((r) => setCats(r.data.data)).catch(() => {}); }, []);
+  const LINKS = [['Collections', '/shop'], ...cats.map((c) => [c.name, `/category/${c.slug}`])];
+
   useMotionValueEvent(scrollY, 'change', (y) => setSolid(y > 60));
   useEffect(() => { document.body.style.overflow = open ? 'hidden' : ''; }, [open]);
 
@@ -40,30 +39,29 @@ export default function LandingNav() {
 
   const accountLinks = user
     ? [
-        ['Profile', '/profile', User],
-        ['My Orders', '/orders', Package],
-        ['Wishlist', '/wishlist', Heart],
-        ['Rewards', '/profile?tab=rewards', Gift],
-        ...(user.role === 'admin' ? [['Admin Panel', '/admin', LayoutDashboard]] : []),
-      ]
+      ['Profile', '/profile', User],
+      ['My Orders', '/orders', Package],
+      ['Wishlist', '/wishlist', Heart],
+      ['Rewards', '/profile?tab=rewards', Gift],
+      ...(user.role === 'admin' ? [['Admin Panel', '/admin', LayoutDashboard]] : []),
+    ]
     : [
-        ['Sign in', '/login', User],
-        ['Create account', '/register', User],
-      ];
+      ['Sign in', '/login', User],
+      ['Create account', '/register', User],
+    ];
 
   return (
     <motion.header
       initial={{ y: -80, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-      className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${
-        solid
-          ? 'border-b border-white/40 bg-white/70 shadow-[0_8px_30px_-16px_rgba(17,17,17,0.25)] backdrop-blur-xl dark:border-white/10 dark:bg-ink/70'
-          : 'bg-transparent'
-      }`}
+      className={`fixed inset-x-0 top-0 z-50 transition-all duration-500 ${solid
+        ? 'border-b border-white/40 bg-white/70 shadow-[0_8px_30px_-16px_rgba(17,17,17,0.25)] backdrop-blur-xl dark:border-white/10 dark:bg-ink/70'
+        : 'bg-transparent'
+        }`}
     >
       <nav className="mx-auto flex max-w-[1400px] items-center justify-between px-5 py-4 sm:px-8 lg:px-12">
-        <Link to="/" aria-label="Nova Clothing home" className="shrink-0">
+        <Link to="/" aria-label="Novo Clothing home" className="shrink-0">
           <Logo white={!solid || theme === 'dark'} className="h-10 transition-all duration-500" />
         </Link>
 

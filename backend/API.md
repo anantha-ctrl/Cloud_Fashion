@@ -1,4 +1,4 @@
-# Nova Clothing — API Reference
+# Novo Clothing — API Reference
 
 Base URL: `http://localhost/CloudFashion/backend`
 All responses: `{ "success": bool, "message": string, "data": any }`

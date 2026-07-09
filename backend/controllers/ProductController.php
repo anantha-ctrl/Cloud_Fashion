@@ -1,6 +1,36 @@
 <?php
 class ProductController
 {
+    // Resolved storefront category scope (e.g. a men-only store), cached per request.
+    // false = not yet resolved; null = no scope; array = ['ids'=>[int,...],'slug'=>string].
+    private static $scope = false;
+
+    /**
+     * Storefront category scope from settings. When `storefront_category` names a
+     * category slug, the whole storefront (listings, collections, filters, product
+     * pages) is limited to that category and its children — everything else stays
+     * in the DB (admin-managed) but is hidden from shoppers. Empty = full catalogue.
+     */
+    private function storeScope(): ?array
+    {
+        if (self::$scope === false) {
+            self::$scope = null;
+            $slug = trim((string) Setting::get('storefront_category', ''));
+            if ($slug !== '') {
+                $db = db();
+                $s = $db->prepare('SELECT id FROM categories WHERE slug=?');
+                $s->execute([$slug]);
+                if ($id = (int) $s->fetchColumn()) {
+                    $ch = $db->prepare('SELECT id FROM categories WHERE parent_id=?');
+                    $ch->execute([$id]);
+                    $ids = array_merge([$id], array_map('intval', $ch->fetchAll(PDO::FETCH_COLUMN)));
+                    self::$scope = ['ids' => $ids, 'slug' => $slug];
+                }
+            }
+        }
+        return self::$scope;
+    }
+
     /**
      * GET /api/products/filters — available filter facets for the storefront
      * sidebar, derived from real data (optionally scoped to a category/search):
@@ -19,6 +49,10 @@ class ProductController
             $where[] = '(p.name LIKE ? OR p.brand LIKE ? OR p.description LIKE ?)';
             $like = "%$q%";
             array_push($args, $like, $like, $like);
+        }
+        if ($scope = $this->storeScope()) {
+            $where[] = 'p.category_id IN (' . implode(',', array_fill(0, count($scope['ids']), '?')) . ')';
+            $args = array_merge($args, $scope['ids']);
         }
         $whereSql = implode(' AND ', $where);
         $base = "FROM products p JOIN categories c ON c.id = p.category_id";
@@ -102,6 +136,11 @@ class ProductController
                 $args = array_merge($args, $colors);
             }
         }
+        // Storefront category scope (e.g. men-only store) applies to every listing.
+        if ($scope = $this->storeScope()) {
+            $where[] = 'p.category_id IN (' . implode(',', array_fill(0, count($scope['ids']), '?')) . ')';
+            $args = array_merge($args, $scope['ids']);
+        }
 
         $sortMap = [
             'price_asc'  => 'p.price ASC',
@@ -156,6 +195,10 @@ class ProductController
         $stmt->execute([$p['slug']]);
         $product = $stmt->fetch();
         if (!$product) {
+            Response::error('Product not found', 404);
+        }
+        // Hide products outside the storefront scope (e.g. non-men items).
+        if (($scope = $this->storeScope()) && !in_array((int) $product['category_id'], $scope['ids'], true)) {
             Response::error('Product not found', 404);
         }
         $product = $this->castProduct($product);
@@ -239,10 +282,13 @@ class ProductController
     private function collection(string $cond, string $order = 'created_at DESC'): void
     {
         $limit = min(20, max(1, (int) Request::query('limit', 8)));
+        // Storefront scope (ids come from the DB, safe to inline as integers).
+        $scopeSql = ($scope = $this->storeScope())
+            ? ' AND p.category_id IN (' . implode(',', $scope['ids']) . ')' : '';
         $sql = "SELECT p.*, c.slug AS category_slug,
                    (SELECT image_url FROM product_images WHERE product_id=p.id ORDER BY is_primary DESC LIMIT 1) AS image
                 FROM products p JOIN categories c ON c.id=p.category_id
-                WHERE p.is_active=1 AND $cond ORDER BY $order LIMIT $limit";
+                WHERE p.is_active=1 AND $cond$scopeSql ORDER BY $order LIMIT $limit";
         $rows = db()->query($sql)->fetchAll();
         Response::success(array_map([$this, 'castProduct'], $rows));
     }

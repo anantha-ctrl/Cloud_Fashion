@@ -67,3 +67,59 @@ input:-webkit-autofill:active {
   background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
   animation: shimmer 1.5s infinite;
 }
+
+/* ── Admin dashboard utilities ── */
+
+/* Stagger animation delay classes for cascading card entrances */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.10s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.20s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.30s; }
+.stagger-7 { animation-delay: 0.35s; }
+.stagger-8 { animation-delay: 0.40s; }
+
+/* KPI card hover glow */
+.card-glow {
+  transition: box-shadow 0.3s ease, border-color 0.3s ease, transform 0.25s ease;
+}
+.card-glow:hover {
+  box-shadow: 0 0 24px rgba(201, 169, 106, 0.15), 0 8px 32px rgba(0,0,0,0.12);
+  border-color: rgba(201, 169, 106, 0.3);
+  transform: translateY(-2px);
+}
+
+/* Active sidebar accent bar */
+.nav-accent-active {
+  position: relative;
+}
+.nav-accent-active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 0 4px 4px 0;
+  background: linear-gradient(180deg, #c9a96a, #e3cfa3);
+  box-shadow: 0 0 8px rgba(201, 169, 106, 0.4);
+}
+
+/* Gradient icon background for KPI cards */
+.icon-gradient-emerald { background: linear-gradient(135deg, rgba(16,185,129,0.15), rgba(16,185,129,0.05)); }
+.icon-gradient-blue    { background: linear-gradient(135deg, rgba(59,130,246,0.15), rgba(59,130,246,0.05)); }
+.icon-gradient-indigo  { background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(99,102,241,0.05)); }
+.icon-gradient-gold    { background: linear-gradient(135deg, rgba(201,169,106,0.2), rgba(201,169,106,0.05)); }
+.icon-gradient-amber   { background: linear-gradient(135deg, rgba(245,158,11,0.15), rgba(245,158,11,0.05)); }
+.icon-gradient-cyan    { background: linear-gradient(135deg, rgba(6,182,212,0.15), rgba(6,182,212,0.05)); }
+.icon-gradient-rose    { background: linear-gradient(135deg, rgba(244,63,94,0.15), rgba(244,63,94,0.05)); }
+
+/* Donut chart center label */
+.donut-center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}

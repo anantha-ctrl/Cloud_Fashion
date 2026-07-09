@@ -3,9 +3,21 @@ class CategoryController
 {
     public function index(array $p): void
     {
+        // Storefront category scope (e.g. a men-only store): limit the visible
+        // categories to the scoped one + its children. Empty setting = show all.
+        $scopeSql = '';
+        $slug = trim((string) Setting::get('storefront_category', ''));
+        if ($slug !== '') {
+            $s = db()->prepare('SELECT id FROM categories WHERE slug=?');
+            $s->execute([$slug]);
+            if ($id = (int) $s->fetchColumn()) {
+                $scopeSql = ' AND (c.id = ' . $id . ' OR c.parent_id = ' . $id . ')';
+            }
+        }
+
         $rows = db()->query(
             'SELECT c.*, (SELECT COUNT(*) FROM products WHERE category_id=c.id AND is_active=1) AS product_count
-             FROM categories c WHERE is_active=1 ORDER BY name'
+             FROM categories c WHERE is_active=1' . $scopeSql . ' ORDER BY name'
         )->fetchAll();
 
         // Swap heavy inline base64 images for a light, cached passthrough URL so

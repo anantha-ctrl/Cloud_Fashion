@@ -2,9 +2,9 @@ export default function About() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-16">
       <p className="text-xs uppercase tracking-[0.3em] text-gold">Our Story</p>
-      <h1 className="mt-2 font-display text-4xl font-bold">About Nova Clothing</h1>
+      <h1 className="mt-2 font-display text-4xl font-bold">About Novo Clothing</h1>
       <div className="mt-8 space-y-5 leading-relaxed text-gray-500 dark:text-gray-300">
-        <p>Nova Clothing was born from a simple belief: premium style should feel effortless. We curate
+        <p>Novo Clothing was born from a simple belief: premium style should feel effortless. We curate
           collections that blend timeless craftsmanship with contemporary design — pieces made to be worn,
           loved, and remembered.</p>
         <p>From tailored menswear to flowing womenswear, playful kids' styles, statement footwear and refined

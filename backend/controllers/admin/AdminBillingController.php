@@ -19,7 +19,8 @@ class AdminBillingController
     {
         Auth::staff();
         Response::success([
-            'store_name'    => Setting::get('store_name', 'Nova Clothing'),
+            'store_name'    => Setting::get('store_name', 'Novo Clothing'),
+            'logo'          => Setting::get('store_logo', ''),
             'address'       => Setting::get('store_address', ''),
             'phone'         => Setting::get('store_contact_phone', ''),
             'email'         => Setting::get('store_contact_email', ''),
@@ -102,6 +103,21 @@ class AdminBillingController
         $prod['price'] = (float) $prod['price'];
         $prod['stock'] = (int) $prod['stock'];
         Response::success($prod);
+    }
+
+    /** GET /api/admin/billing/customer-lookup?phone= — check if customer exists by phone. */
+    public function customerLookup(array $p): void
+    {
+        Auth::staff();
+        $phone = trim((string) Request::query('phone', ''));
+        if ($phone === '') {
+            Response::success(null);
+            return;
+        }
+        $stmt = db()->prepare("SELECT id, name, email, phone FROM users WHERE phone=? AND role='customer' LIMIT 1");
+        $stmt->execute([$phone]);
+        $row = $stmt->fetch();
+        Response::success($row ?: null);
     }
 
     /** GET /api/admin/billing — recent bills + counter KPIs. */
@@ -202,41 +218,99 @@ class AdminBillingController
         $taxAmount = round($taxable * $taxPct / 100, 2);
         $total     = round($taxable + $taxAmount, 2);
 
-        $method = in_array($body['payment_method'] ?? 'cash', ['cash', 'card', 'upi', 'other'], true)
+        $method = in_array($body['payment_method'] ?? 'cash', ['cash', 'card', 'upi', 'split'], true)
             ? $body['payment_method'] : 'cash';
-        $paid   = $method === 'cash' ? max(0, (float) ($body['paid'] ?? $total)) : $total;
+
+        // Split payment: part cash + part card/UPI. The two portions must cover
+        // the total; overpayment (in the cash portion) becomes change.
+        $splitCash = 0.0;
+        $splitDigital = 0.0;
+        if ($method === 'split') {
+            $splitCash    = max(0, round((float) ($body['split_cash'] ?? 0), 2));
+            $splitDigital = max(0, round((float) ($body['split_digital'] ?? 0), 2));
+            $paid = round($splitCash + $splitDigital, 2);
+            if ($paid + 0.001 < $total) {
+                Response::error('Split amounts (' . number_format($paid, 2) . ') do not cover the total (' . number_format($total, 2) . ').', 422);
+            }
+        } else {
+            $paid = $method === 'cash' ? max(0, (float) ($body['paid'] ?? $total)) : $total;
+        }
         $change = max(0, round($paid - $total, 2));
 
         // Optional customer link (registered user) — enables loyalty earn.
         $userId = null;
         $custName  = trim((string) ($body['customer_name'] ?? '')) ?: null;
         $custPhone = trim((string) ($body['customer_phone'] ?? '')) ?: null;
-        if (!empty($body['user_id'])) {
-            $u = $db->prepare("SELECT id, name FROM users WHERE id=? AND role<>'admin'");
-            $u->execute([(int) $body['user_id']]);
-            if ($row = $u->fetch()) {
-                $userId   = (int) $row['id'];
-                $custName = $custName ?: $row['name'];
+        $custEmail = trim((string) ($body['customer_email'] ?? '')) ?: null;
+
+        if ($custPhone !== null || $custEmail !== null) {
+            $user = null;
+            if ($custPhone !== null) {
+                $u = $db->prepare("SELECT id, name, email FROM users WHERE phone=? AND role='customer' LIMIT 1");
+                $u->execute([$custPhone]);
+                $user = $u->fetch();
+            }
+            if (!$user && $custEmail !== null) {
+                $u = $db->prepare("SELECT id, name, email FROM users WHERE email=? AND role='customer' LIMIT 1");
+                $u->execute([$custEmail]);
+                $user = $u->fetch();
+            }
+
+            if (!$user) {
+                // Determine email (must be unique)
+                $email = $custEmail ?: ($custPhone ? ($custPhone . '@novoclothing.com') : ('customer_' . uniqid() . '@novoclothing.com'));
+                $checkEmail = $db->prepare("SELECT id FROM users WHERE email=? LIMIT 1");
+                $checkEmail->execute([$email]);
+                if ($checkEmail->fetch()) {
+                    $email = ($custPhone ?: uniqid()) . '_' . uniqid() . '@novoclothing.com';
+                }
+
+                $dummyHash = password_hash(uniqid(), PASSWORD_BCRYPT);
+                $db->prepare("INSERT INTO users (name, email, phone, password_hash, role, is_verified) VALUES (?, ?, ?, ?, 'customer', 1)")
+                   ->execute([$custName ?: 'Walk-in Customer', $email, $custPhone, $dummyHash]);
+                $userId = (int) $db->lastInsertId();
+            } else {
+                $userId = (int) $user['id'];
+                // Update missing/changed info on existing customer
+                if ($custName && $user['name'] !== $custName) {
+                    $db->prepare("UPDATE users SET name=? WHERE id=?")->execute([$custName, $userId]);
+                }
+                if ($custEmail && empty($user['email'])) {
+                    $db->prepare("UPDATE users SET email=? WHERE id=?")->execute([$custEmail, $userId]);
+                }
             }
         }
 
-        $prefix = preg_replace('/[^A-Za-z0-9]/', '', (string) Setting::get('billing_invoice_prefix', 'INV')) ?: 'INV';
-        $billNumber = $prefix . date('ymd') . strtoupper(substr(uniqid(), -5));
-
         $db->beginTransaction();
         try {
+            // Insert with a temporary unique key, then update to sequential version using lastInsertId
+            $tempBillNumber = 'TEMP_' . uniqid();
             $db->prepare(
                 "INSERT INTO bills
                     (bill_number, cashier_id, user_id, customer_name, customer_phone,
                      subtotal, discount, discount_type, discount_value, tax_pct, tax_amount,
-                     total, paid, change_due, payment_method, note, status)
-                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'paid')"
+                     total, paid, change_due, split_cash, split_digital, payment_method, note, status)
+                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'paid')"
             )->execute([
-                $billNumber, (int) $admin['sub'], $userId, $custName, $custPhone,
+                $tempBillNumber, (int) $admin['sub'], $userId, $custName, $custPhone,
                 $subtotal, $discount, $discountType, $discountValue, $taxPct, $taxAmount,
-                $total, $paid, $change, $method, trim((string) ($body['note'] ?? '')) ?: null,
+                $total, $paid, $change, $splitCash, $splitDigital, $method, trim((string) ($body['note'] ?? '')) ?: null,
             ]);
             $billId = (int) $db->lastInsertId();
+
+            $prefix = preg_replace('/[^A-Za-z0-9]/', '', (string) Setting::get('billing_invoice_prefix', 'INV')) ?: 'INV';
+            $stmtSeq = $db->prepare("SELECT bill_number FROM bills WHERE bill_number LIKE ? AND bill_number NOT LIKE 'TEMP_%' ORDER BY id DESC LIMIT 1 FOR UPDATE");
+            $stmtSeq->execute([$prefix . '%']);
+            $lastBill = $stmtSeq->fetchColumn();
+            
+            $nextSeq = 1;
+            if ($lastBill) {
+                $numericPart = preg_replace('/[^0-9]/', '', $lastBill);
+                $nextSeq = ((int) $numericPart) + 1;
+            }
+            $billNumber = $prefix . str_pad($nextSeq, 5, '0', STR_PAD_LEFT);
+
+            $db->prepare("UPDATE bills SET bill_number=? WHERE id=?")->execute([$billNumber, $billId]);
 
             $insItem = $db->prepare(
                 'INSERT INTO bill_items (bill_id, product_id, product_name, sku, price, quantity, line_total)
@@ -325,7 +399,7 @@ class AdminBillingController
         if (!$bill) {
             return null;
         }
-        foreach (['subtotal', 'discount', 'discount_value', 'tax_pct', 'tax_amount', 'total', 'paid', 'change_due'] as $k) {
+        foreach (['subtotal', 'discount', 'discount_value', 'tax_pct', 'tax_amount', 'total', 'paid', 'change_due', 'split_cash', 'split_digital'] as $k) {
             $bill[$k] = (float) $bill[$k];
         }
         $it = $db->prepare('SELECT product_name, sku, price, quantity, line_total FROM bill_items WHERE bill_id=?');

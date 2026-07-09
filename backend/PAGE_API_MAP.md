@@ -1,4 +1,4 @@
-# Nova Clothing — Page → API Map
+# Novo Clothing — Page → API Map
 
 Which API endpoint each page / component / context calls.
 Base URL: `http://localhost/CloudFashion/backend`  ·  `(✓)` = needs auth token.

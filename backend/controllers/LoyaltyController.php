@@ -1,10 +1,8 @@
 <?php
 /**
- * Loyalty points & referrals.
+ * Loyalty points.
  *   - Earn EARN_RATE of the order subtotal as points (1 point = Rs.1).
  *   - Redeem points at checkout, up to REDEEM_CAP of the payable amount.
- *   - Referring a friend: the friend gets SIGNUP_BONUS on signup, and the
- *     referrer gets REFERRAL_BONUS when the friend places their first order.
  */
 class LoyaltyController
 {
@@ -13,8 +11,6 @@ class LoyaltyController
         'loyalty_earn_rate_pct'  => 5,   // earn 5% of subtotal as points
         'loyalty_earn_cap'       => 25,  // MAX points earned on a single order
         'loyalty_redeem_cap_pct' => 50,  // points cover up to 50% of the payable amount
-        'loyalty_signup_bonus'   => 50,  // new user who signed up with a referral code
-        'loyalty_referral_bonus' => 100, // referrer reward on the friend's first order
         'loyalty_point_value'    => 1,   // rupee value of ONE point (e.g. 0.5 = 2 pts per Rs.1)
     ];
 
@@ -100,17 +96,14 @@ class LoyaltyController
         return $code;
     }
 
-    /** GET /api/loyalty — the caller's balance, referral info and history. */
+    /** GET /api/loyalty — the caller's balance and history. */
     public function index(array $p): void
     {
         $userId = Auth::id();
         $db = db();
-        $u = $db->prepare('SELECT loyalty_points, referral_code FROM users WHERE id=?');
+        $u = $db->prepare('SELECT loyalty_points FROM users WHERE id=?');
         $u->execute([$userId]);
         $user = $u->fetch();
-
-        $cnt = $db->prepare('SELECT COUNT(*) FROM users WHERE referred_by=?');
-        $cnt->execute([$userId]);
 
         $tx = $db->prepare('SELECT points, type, note, created_at FROM loyalty_transactions WHERE user_id=? ORDER BY id DESC LIMIT 50');
         $tx->execute([$userId]);
@@ -118,14 +111,10 @@ class LoyaltyController
         $c = self::config();
         Response::success([
             'points'         => (int) $user['loyalty_points'],
-            'referral_code'  => $user['referral_code'],
-            'referred_count' => (int) $cnt->fetchColumn(),
             'earn_rate_pct'  => $c['loyalty_earn_rate_pct'],
             'earn_cap'       => $c['loyalty_earn_cap'],
             'redeem_cap_pct' => $c['loyalty_redeem_cap_pct'],
             'point_value'    => $c['loyalty_point_value'],
-            'signup_bonus'   => $c['loyalty_signup_bonus'],
-            'referral_bonus' => $c['loyalty_referral_bonus'],
             'history'        => $tx->fetchAll(),
         ]);
     }

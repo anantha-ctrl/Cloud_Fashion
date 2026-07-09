@@ -9,7 +9,7 @@ import api from '../../api/client';
 const EASE = [0.22, 1, 0.36, 1];
 
 const DEFAULTS = {
-  hero_eyebrow: 'Nova Clothing — Est. Elegance',
+  hero_eyebrow: 'Novo Clothing — Est. Elegance',
   hero_title: "We don't sell clothes.",
   hero_accent: 'We create confidence.',
   hero_subtitle: 'Editorial fashion, crafted in India — designed to make every moment feel like a statement.',

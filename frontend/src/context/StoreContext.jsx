@@ -4,7 +4,7 @@ import api from '../api/client';
 // Public, store-wide config (announcement bar, socials, contact, shipping…)
 // fetched once at app boot from /api/store-info and shared everywhere.
 const DEFAULTS = {
-  name: 'Nova Clothing',
+  name: 'Novo Clothing',
   logo: '',
   email: 'support@cloudfashion.com',
   phone: '+91 98765 43210',
@@ -26,7 +26,7 @@ export function StoreProvider({ children }) {
   useEffect(() => {
     api.get('/api/store-info')
       .then((r) => setStore((s) => ({ ...s, ...r.data.data })))
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   return <StoreContext.Provider value={store}>{children}</StoreContext.Provider>;

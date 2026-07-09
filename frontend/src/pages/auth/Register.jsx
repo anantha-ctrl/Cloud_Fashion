@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Check, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import AuthShell from './AuthShell';
@@ -10,10 +10,8 @@ import { useAuth } from '../../context/AuthContext';
 export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
-  const [params] = useSearchParams();
   const [form, setForm] = useState({
     name: '', email: '', phone: '', password: '', password_confirmation: '',
-    referral_code: (params.get('ref') || '').toUpperCase(),
   });
   const [loading, setLoading] = useState(false);
 
@@ -30,7 +28,7 @@ export default function Register() {
   };
 
   return (
-    <AuthShell title="Create account" subtitle="Join Nova Clothing for exclusive drops"
+    <AuthShell title="Create account" subtitle="Join Novo Clothing for exclusive drops"
       footer={<>Already have an account? <Link to="/login" className="font-semibold text-gold">Sign in</Link></>}>
       <form onSubmit={submit} className="space-y-4">
         <input required className="input" placeholder="Full name" value={form.name}
@@ -48,16 +46,13 @@ export default function Register() {
           <PasswordInput required placeholder="Confirm password" value={form.password_confirmation}
             onChange={(e) => setForm({ ...form, password_confirmation: e.target.value })} />
           {form.password_confirmation && (
-            <p className={`mt-1.5 flex items-center gap-1.5 text-xs ${
-              form.password === form.password_confirmation ? 'text-green-600' : 'text-red-500'}`}>
+            <p className={`mt-1.5 flex items-center gap-1.5 text-xs ${form.password === form.password_confirmation ? 'text-green-600' : 'text-red-500'}`}>
               {form.password === form.password_confirmation
                 ? <><Check size={13} /> Passwords match</>
                 : <><X size={13} /> Passwords don’t match</>}
             </p>
           )}
         </div>
-        <input className="input" placeholder="Referral code (optional)" value={form.referral_code}
-          onChange={(e) => setForm({ ...form, referral_code: e.target.value.toUpperCase() })} />
         <button disabled={loading} className="btn-gold w-full">{loading ? 'Creating…' : 'Create Account'}</button>
       </form>
     </AuthShell>

@@ -1,4 +1,4 @@
-# ☁️ Nova Clothing
+# ☁️ Novo Clothing
 
 A complete, production-ready **single-vendor fashion e-commerce** web application with a premium, luxury UI — featuring a glassmorphism design, dark/light mode, full customer storefront, and a powerful admin dashboard.
 
@@ -49,7 +49,7 @@ flowchart TB
 - **Reviews 2.0** — Verified buyers can review **after delivery**; star rating + title + comment, per-product rating breakdown bars
 - **Product comparison** — Add items to a **compare bar** and view side-by-side specs
 - **Wishlist**, **Cart** (variant-aware, live totals)
-- **Loyalty & Referrals** — Earn points on every order (configurable rate + **per-order cap**), **redeem at checkout** (configurable ₹ value per point) optionally, unique **referral code** (friend gets a signup bonus, you get a one-time referral bonus on their first order); Rewards tab with balance + history
+- **Loyalty Points** — Earn points on every order (configurable rate + **per-order cap**), **redeem at checkout** (configurable ₹ value per point); Rewards tab with balance + history
 - **Checkout** — Address management, **live available-coupons chips** (tap to apply), **loyalty points redemption**, **Razorpay** online payment + **COD**
   - **Smart shipping** — first order ships **free**; repeat orders free above the (admin-set) threshold, else a flat fee
   - **First-order-only coupons** (e.g. `WELCOME10`) validated against order history
@@ -64,7 +64,8 @@ flowchart TB
 ### Admin
 - **Dashboard** — KPI cards (today's sales, pending orders, avg order value, new customers…), a **sales-by-channel** row (online vs in-store counter), revenue chart, color-coded order-status chart, top products & recent customers widgets, manual **Refresh**
   - **Combined revenue** — online orders **+** in-store billing counter sales; cancelled orders excluded (only `paid` & non-cancelled count)
-- **Billing / POS** — in-store checkout counter: live product search + **QR/barcode scan**, cart with per-order discount (₹ or %) and configurable **tax/GST**, cash/UPI/card/other payment with change calc, optional customer (earns loyalty), **printable thermal invoice**, bill **history + void & restock**; every sale decrements the same live stock as online orders
+- **Billing / POS** — in-store checkout counter: live product search + **QR/barcode scan**, cart with per-order discount (₹ or %) and configurable **tax/GST**, **cash / UPI / card / split** payment (split = part cash + part card/UPI, validated to cover the total) with change calc, optional customer (earns loyalty), **printable thermal invoice** (80mm, monospace, store **logo** header), bill **history + void & restock**; every sale decrements the same live stock as online orders
+- **Invoices** — one unified list of **every sale** — online orders **+** counter bills — newest first, with channel filter (All / Online / Counter), KPIs, and **view + print** for each (thermal receipt for counter, A4 invoice for online), auto-refreshing
 - **Cashiers** — create billing-counter staff logins (`cashier` role) that can access **only** the billing screen; block/unblock, reset password, per-cashier sales totals
 - **Notifications** — Bell with live alerts, **mark read/unread**, **delete**, **mark-all-read**
 - **Products** — Full CRUD, multiple images (Cloudinary or inline base64), variants, specifications, **bulk CSV import** (auto-creates categories)
@@ -76,12 +77,13 @@ flowchart TB
 - **Customers** — List with spend, order history drill-down
 - **Reviews** — Moderate customer reviews (hide/unhide, delete) with live rating recalculation
 - **Returns** — Approve/reject RMA requests → auto-restock + refund status + customer email
-- **Loyalty** — Per-customer point balances, KPIs (issued/redeemed/outstanding), transaction history, **manual credit/deduct**, and editable **program rules** (earn rate, per-order cap, ₹ per point, redeem cap, signup & referral bonuses)
+- **Loyalty** — Per-customer point balances, KPIs (issued/redeemed/outstanding), transaction history, **manual credit/deduct**, and editable **program rules** (earn rate, per-order cap, ₹ per point, redeem cap)
 - **Messages** — Inbox for Contact Us submissions with unread badge, mark read/unread, one-click email reply
 - **Store Settings** — Edit store name, public contact details, message inbox, **announcement bar**, **free-shipping threshold + flat fee**, **social links & WhatsApp** — all live on the storefront in real time
 - **Reports** — Date-range filter + presets, KPI cards (incl. **online vs counter revenue**), charts (daily revenue, orders by status, revenue by category, payment methods) — **all combine online + in-store billing** — CSV export, **Refresh** (revenue excludes cancelled)
-- **Product QR labels** — generate & print a scannable QR sticker per product (encodes the product URL); scanned at the billing counter to add the item instantly
-- **Store Settings → Brand** — upload a **store logo** + edit the store name; both go live everywhere (header, footer, admin, emails, invoices) in real time
+- **Product QR labels** — generate & print scannable QR stickers (encode the product URL) for the counter scanner: a single product, **N copies** of one product, or **all products on one sheet** (bulk)
+- **Storefront scope** — a `storefront_category` setting limits the whole storefront (listings, collections, filters, product pages, nav & footer categories) to one category + its children — currently **men-only**; other products stay in the DB, manageable in admin and sellable at the counter
+- **Store Settings → Brand** — upload a **store logo** + edit the store name; both go live everywhere (header, footer, admin, emails, invoices, thermal receipts) in real time
 - **Account dropdown** (Profile / Settings / Change Password / Logout), **static/sticky sidebar**, brand logo across all pages
 
 ---
@@ -92,7 +94,7 @@ flowchart TB
 CloudFashion/
 ├── database/
 │   ├── cloudfashion.sql          # Full schema + seed data
-│   └── migration_002…021.sql     # Incremental schema updates (see Migrations)
+│   └── migration_002…023.sql     # Incremental schema updates (see Migrations)
 ├── backend/                      # PHP API (front-controller, no Composer needed)
 │   ├── bootstrap.php             # Loads env, core, autoloader
 │   ├── index.php                 # Router + CORS
@@ -105,9 +107,9 @@ CloudFashion/
     ├── src/
     │   ├── api/client.js          # Axios instance (JWT interceptor)
     │   ├── context/               # Auth, Cart, Wishlist, Theme, Compare, Store
-    │   ├── components/            # Navbar (mega menu), Footer, ProductCard, CompareBar, …
+    │   ├── components/            # Navbar (DB-driven categories), Footer, ProductCard, CompareBar, …
     │   ├── pages/                 # Home, Shop, ProductDetails, Cart, Checkout, Orders, Compare, auth/, static/
-    │   └── admin/                 # AdminLayout, Dashboard, AdminProducts, AdminReviews, AdminReturns, AdminLoyalty, AdminMessages, AdminSettings, …
+    │   └── admin/                 # AdminLayout, Dashboard, AdminProducts, AdminBilling, AdminInvoices, AdminReviews, AdminReturns, AdminLoyalty, AdminSettings, …
     └── tailwind.config.js
 ```
 
@@ -221,6 +223,8 @@ erDiagram
 | `migration_019.sql` | Widen `settings.value` to `MEDIUMTEXT` (inline base64 logo/images) |
 | `migration_020.sql` | **Billing / POS** — `bills` + `bill_items` tables + billing settings (tax %, invoice prefix, footer) |
 | `migration_021.sql` | **Cashier role** — `users.role` gains `cashier` (billing-counter staff) |
+| `migration_022.sql` | **Split payment** — replaces billing `other` method with `split` (`split_cash` + `split_digital`) |
+| `migration_023.sql` | **Storefront scope** — `storefront_category` setting limits the storefront to one category + children (e.g. men-only) |
 
 ```bash
 # apply every migration in order (phpMyAdmin or CLI)
@@ -246,8 +250,8 @@ This creates the `cloudfashion` database with sample products, categories, and t
 
 | Role     | Email                       | Password   |
 |----------|-----------------------------|------------|
-| Admin    | `admin@cloudfashion.com`    | `Admin@123`|
-| Customer | `customer@cloudfashion.com` | `Test@123` |
+| Admin    | `admin@novaclothing.com`    | `Admin@123`|
+| Customer | `customer@novaclothing.com` | `Test@123` |
 
 ### 2. Backend
 The project lives in `htdocs`, so Apache serves it automatically.
@@ -339,7 +343,9 @@ GET    /api/categories/{slug}/thumb  GET    /api/products/{id}/thumb   (cached i
 # admin (Authorization: Bearer <admin jwt>)
 GET    /api/admin/dashboard          GET    /api/admin/notifications
 POST   /api/admin/products           POST   /api/admin/products/import   (bulk CSV)
+GET    /api/admin/categories         (full, unscoped list for admin)
 PUT    /api/admin/orders/{id}/status (carrier + tracking, emails customer)
+GET    /api/admin/invoices           GET    /api/admin/invoices/order/{id}  (unified sales)
 GET    /api/admin/reports/sales?from=&to=   (online + counter combined)
 CRUD   /api/admin/banners            CRUD   /api/admin/coupons
 GET/PUT/DELETE /api/admin/reviews    GET/PUT /api/admin/returns
@@ -351,7 +357,8 @@ CRUD   /api/admin/staff              (cashier accounts)
 # billing / POS  (Authorization: Bearer <admin OR cashier jwt>)
 GET    /api/admin/billing/config     GET    /api/admin/billing/products?q=
 GET    /api/admin/billing/lookup?code=   (resolve scanned QR/barcode)
-GET    /api/admin/billing            POST   /api/admin/billing         (create bill)
+GET    /api/admin/billing/customer-lookup?phone=   (link a returning customer)
+GET    /api/admin/billing            POST   /api/admin/billing         (create bill; split payment supported)
 GET    /api/admin/billing/{id}       PUT    /api/admin/billing/{id}/void
 ```
 
@@ -447,17 +454,26 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** for production deployment.
 
 ## 🆕 What's New (post-launch updates)
 
-### Latest wave — in-store billing, cashiers & a premium landing page
+### Latest wave — men-only store, split payment, unified invoices & thermal receipts
+- **Split payment** at the counter — settle a bill part **cash** + part **card/UPI**; the server validates the two portions cover the total and stores the breakdown, which prints on the receipt. (Replaces the old "other" method — migration 022.)
+- **Unified Invoices page** (Admin → Invoices) — **every sale in one place**: online orders **+** counter bills, newest first, with channel filter, KPIs, and view/print per row (thermal for counter, A4 for online).
+- **Men-only storefront scope** — a `storefront_category` setting (migration 023) limits the entire storefront to one category + children; nav and footer categories are DB-driven and follow automatically. Non-men products stay in the DB, manageable in admin and sellable at the counter.
+- **Redesigned thermal receipt** — authentic 80mm monospace layout with the **store logo** header, dashed separators, item count, split breakdown and cut line.
+- **Bulk / multi-copy QR labels** — print **all products on one sheet**, or **N copies** of a single product's label.
+- **Referral programme removed** — loyalty **points** stay; referral codes / signup & referral bonuses were retired.
+- **Brand → Novo Clothing** — renamed everywhere (DB, emails, SEO, PWA, receipts); mega-menu dropped in favour of DB-driven nav; footer shop links are now live from categories.
+
+### Earlier wave — in-store billing, cashiers & a premium landing page
 - **Billing / POS counter** — a full in-store checkout: live product search + **QR/barcode scan**, discount (₹/%), configurable **tax/GST**, cash/UPI/card payment with change, optional customer (earns loyalty), **printable invoice**, and bill **history + void & restock**. Sales decrement the **same live inventory** as online orders.
 - **Cashier role** — admin creates billing-counter logins that can reach **only** the POS screen; per-cashier sales, block/unblock, password reset.
 - **Dashboard & Reports now combine channels** — every revenue figure, chart, top-product and category breakdown merges **online orders + in-store bills**; new online-vs-counter KPIs.
 - **Product QR labels** — generate & print a scannable QR per product for the counter scanner.
 - **Premium landing page** (`/`) — Awwwards-style editorial experience: **3D coverflow hero** (admin banners) + auto-sliding **category / featured / styled-by-you** carousels, all live from the DB; admin-editable hero & story copy + imagery; dark/light + profile dropdown.
-- **Brand control** — store renamed to **Nova Clothing**; upload a **store logo** from Admin → Settings → Brand and it goes live everywhere (header, footer, admin, emails, invoices) in real time.
+- **Brand control** — store renamed to **Novo Clothing**; upload a **store logo** from Admin → Settings → Brand and it goes live everywhere (header, footer, admin, emails, invoices) in real time.
 - **Lighter media** — category & product images stream through a **cached passthrough endpoint** instead of shipping multi-MB base64 in list responses.
 
 ### Earlier wave — engagement, retention & store control
-- **Loyalty & Referrals** — earn points per order (admin-set rate + **per-order cap**), **redeem at checkout** with a configurable **₹ value per point**, unique **referral codes** (signup + one-time referral bonus), customer **Rewards** tab, and an admin **Loyalty** console (balances, KPIs, history, manual adjust, editable rules)
+- **Loyalty points** — earn points per order (admin-set rate + **per-order cap**), **redeem at checkout** with a configurable **₹ value per point**, customer **Rewards** tab, and an admin **Loyalty** console (balances, KPIs, history, manual adjust, editable rules). *(A referral programme shipped in this wave but was later removed — see the latest wave.)*
 - **Returns & Refunds (RMA)** — request returns on delivered orders; admin approve/reject → auto-restock + refund status + customer email
 - **Reviews 2.0** — verified **post-delivery** reviews, rating breakdown, admin **moderation** (hide/delete with live rating recalc)
 - **Smart discovery** — **frequently-bought-together**, **trending / best-seller** badges, **product comparison** bar & page
@@ -493,4 +509,4 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** for production deployment.
 ---
 
 ## 📄 License
-MIT — built as a complete reference implementation for Nova Clothing.
+MIT — built as a complete reference implementation for Novo Clothing.

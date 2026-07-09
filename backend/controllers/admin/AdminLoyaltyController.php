@@ -1,8 +1,8 @@
 <?php
 /**
- * Admin view & control over the loyalty / referral programme.
- *   - index:  every customer's point balance + referral stats + programme totals
- *   - show:   one customer's full transaction history + who they referred
+ * Admin view & control over the loyalty programme.
+ *   - index:  every customer's point balance + programme totals
+ *   - show:   one customer's full transaction history
  *   - adjust: manually credit or debit a customer's points (recorded as 'adjust')
  */
 class AdminLoyaltyController
@@ -14,8 +14,7 @@ class AdminLoyaltyController
         $db = db();
 
         $rows = $db->query(
-            "SELECT u.id, u.name, u.email, u.loyalty_points, u.referral_code,
-                    (SELECT COUNT(*) FROM users r WHERE r.referred_by = u.id)        AS referred_count,
+            "SELECT u.id, u.name, u.email, u.loyalty_points,
                     (SELECT COALESCE(SUM(points),0) FROM loyalty_transactions t
                        WHERE t.user_id = u.id AND t.points > 0)                       AS total_earned,
                     (SELECT COALESCE(-SUM(points),0) FROM loyalty_transactions t
@@ -27,7 +26,6 @@ class AdminLoyaltyController
 
         foreach ($rows as &$r) {
             $r['loyalty_points'] = (int) $r['loyalty_points'];
-            $r['referred_count'] = (int) $r['referred_count'];
             $r['total_earned']   = (int) $r['total_earned'];
             $r['total_redeemed'] = (int) $r['total_redeemed'];
         }
@@ -37,8 +35,7 @@ class AdminLoyaltyController
         $stats = $db->query(
             "SELECT
                 COALESCE(SUM(CASE WHEN points > 0 THEN points END), 0) AS issued,
-                COALESCE(-SUM(CASE WHEN points < 0 THEN points END), 0) AS redeemed,
-                COALESCE(SUM(CASE WHEN type='referral' THEN points END), 0) AS referral_points
+                COALESCE(-SUM(CASE WHEN points < 0 THEN points END), 0) AS redeemed
              FROM loyalty_transactions"
         )->fetch();
 
@@ -47,10 +44,9 @@ class AdminLoyaltyController
         Response::success([
             'customers' => $rows,
             'stats'     => [
-                'issued'          => (int) $stats['issued'],
-                'redeemed'        => (int) $stats['redeemed'],
-                'outstanding'     => $outstanding,
-                'referral_points' => (int) $stats['referral_points'],
+                'issued'      => (int) $stats['issued'],
+                'redeemed'    => (int) $stats['redeemed'],
+                'outstanding' => $outstanding,
             ],
             'settings'  => LoyaltyController::config(),
         ]);
@@ -68,8 +64,6 @@ class AdminLoyaltyController
             'loyalty_earn_cap'       => [0, 100000, false],
             'loyalty_redeem_cap_pct' => [0, 100, false],
             'loyalty_point_value'    => [0.01, 1000, true],
-            'loyalty_signup_bonus'   => [0, 100000, false],
-            'loyalty_referral_bonus' => [0, 100000, false],
         ];
         foreach ($fields as $key => [$min, $max, $isFloat]) {
             if (array_key_exists($key, $body)) {
@@ -81,14 +75,14 @@ class AdminLoyaltyController
         Response::success(LoyaltyController::config(), 'Loyalty settings updated');
     }
 
-    /** GET /api/admin/loyalty/{id} — one customer's balance, history and referrals. */
+    /** GET /api/admin/loyalty/{id} — one customer's balance and history. */
     public function show(array $p): void
     {
         Auth::admin();
         $db = db();
         $id = (int) $p['id'];
 
-        $u = $db->prepare('SELECT id, name, email, loyalty_points, referral_code FROM users WHERE id=?');
+        $u = $db->prepare('SELECT id, name, email, loyalty_points FROM users WHERE id=?');
         $u->execute([$id]);
         $user = $u->fetch();
         if (!$user) {
@@ -104,13 +98,9 @@ class AdminLoyaltyController
         );
         $tx->execute([$id]);
 
-        $ref = $db->prepare('SELECT id, name, email, created_at FROM users WHERE referred_by=? ORDER BY created_at DESC');
-        $ref->execute([$id]);
-
         Response::success([
-            'user'      => $user,
-            'history'   => $tx->fetchAll(),
-            'referrals' => $ref->fetchAll(),
+            'user'    => $user,
+            'history' => $tx->fetchAll(),
         ]);
     }
 

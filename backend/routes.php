@@ -5,7 +5,7 @@
  */
 
 // Health check
-$router->get('/', fn() => Response::success(['name' => 'Nova Clothing API', 'version' => '1.0']));
+$router->get('/', fn() => Response::success(['name' => 'Novo Clothing API', 'version' => '1.0']));
 
 // ---- Auth ----
 $router->post('/api/auth/register',        'AuthController@register');
@@ -98,6 +98,7 @@ $router->get('/api/admin/reports/sales',      'AdminReportController@sales');
 $router->get('/api/admin/reports/products',   'AdminReportController@products');
 $router->get('/api/admin/reports/customers',  'AdminReportController@customers');
 
+$router->get('/api/admin/categories',         'AdminCategoryController@index');
 $router->post('/api/admin/categories',        'AdminCategoryController@store');
 $router->put('/api/admin/categories/{id}',    'AdminCategoryController@update');
 $router->delete('/api/admin/categories/{id}', 'AdminCategoryController@destroy');
@@ -115,6 +116,10 @@ $router->put('/api/admin/inventory/{id}',     'AdminProductController@updateStoc
 
 $router->get('/api/admin/orders',             'AdminOrderController@index');
 $router->put('/api/admin/orders/{id}/status', 'AdminOrderController@updateStatus');
+
+// Unified invoices — online orders + counter bills in one view
+$router->get('/api/admin/invoices',             'AdminInvoiceController@index');
+$router->get('/api/admin/invoices/order/{id}',  'AdminInvoiceController@order');
 
 $router->get('/api/admin/customers',          'AdminCustomerController@index');
 $router->get('/api/admin/customers/{id}',     'AdminCustomerController@show');
@@ -144,6 +149,7 @@ $router->post('/api/admin/loyalty/{id}/adjust','AdminLoyaltyController@adjust');
 // ---- Billing / POS (literal routes before {id}) ----
 $router->get('/api/admin/billing/config',      'AdminBillingController@config');
 $router->get('/api/admin/billing/lookup',      'AdminBillingController@lookup');
+$router->get('/api/admin/billing/customer-lookup', 'AdminBillingController@customerLookup');
 $router->get('/api/admin/billing/products',    'AdminBillingController@products');
 $router->get('/api/admin/billing',             'AdminBillingController@index');
 $router->post('/api/admin/billing',            'AdminBillingController@create');

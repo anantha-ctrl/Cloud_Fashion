@@ -115,7 +115,7 @@ class MiscController
     public function landing(array $p): void
     {
         Response::success([
-            'hero_eyebrow'  => Setting::get('landing_hero_eyebrow', 'Nova Clothing — Est. Elegance'),
+            'hero_eyebrow'  => Setting::get('landing_hero_eyebrow', 'Novo Clothing — Est. Elegance'),
             'hero_title'    => Setting::get('landing_hero_title', "We don't sell clothes."),
             'hero_accent'   => Setting::get('landing_hero_accent', 'We create confidence.'),
             'hero_subtitle' => Setting::get('landing_hero_subtitle', 'Editorial fashion, crafted in India — designed to make every moment feel like a statement.'),
@@ -136,7 +136,7 @@ class MiscController
     public function storeInfo(array $p): void
     {
         Response::success([
-            'name'              => Setting::get('store_name', 'Nova Clothing'),
+            'name'              => Setting::get('store_name', 'Novo Clothing'),
             'logo'              => Setting::get('store_logo', ''),
             'email'             => Setting::get('store_contact_email', 'support@cloudfashion.com'),
             'phone'             => Setting::get('store_contact_phone', '+91 98765 43210'),

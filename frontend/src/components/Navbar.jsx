@@ -10,14 +10,6 @@ import api from '../api/client';
 import { inr } from '../utils/format';
 import Logo from './Logo';
 
-const MEGA = {
-  Men: ['Shirts', 'T-Shirts', 'Blazers', 'Trousers', 'Denim'],
-  Women: ['Dresses', 'Tops', 'Co-ord Sets', 'Ethnic', 'Outerwear'],
-  Kids: ['Boys', 'Girls', 'Infants', 'Footwear'],
-  Footwear: ['Sneakers', 'Heels', 'Boots', 'Loafers'],
-  Accessories: ['Bags', 'Watches', 'Belts', 'Jewellery'],
-};
-
 export default function Navbar() {
   const { theme, toggle } = useTheme();
   const { user, logout, isAdmin } = useAuth();
@@ -27,7 +19,6 @@ export default function Navbar() {
   const [cats, setCats] = useState([]);
   const [openMenu, setOpenMenu] = useState(false);
   const [q, setQ] = useState('');
-  const [hovered, setHovered] = useState(null);
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggest, setShowSuggest] = useState(false);
   const navigate = useNavigate();
@@ -98,27 +89,13 @@ export default function Navbar() {
             <Logo className="h-9 sm:h-11" />
           </Link>
 
-          {/* Desktop nav with mega menu */}
-          <ul className="ml-6 hidden items-center gap-6 lg:flex" onMouseLeave={() => setHovered(null)}>
+          {/* Desktop nav — categories straight from the DB, no fake submenus */}
+          <ul className="ml-6 hidden items-center gap-6 lg:flex">
             {cats.map((c) => (
-              <li key={c.id} onMouseEnter={() => setHovered(c.name)} className="relative">
+              <li key={c.id}>
                 <Link to={`/category/${c.slug}`} className="text-sm font-medium hover:text-gold transition">
                   {c.name}
                 </Link>
-                {hovered === c.name && MEGA[c.name] && (
-                  <div className="absolute left-1/2 top-full z-50 w-56 -translate-x-1/2 pt-4">
-                    <div className="card p-4">
-                      <p className="mb-2 text-xs uppercase tracking-widest text-gold">{c.name}</p>
-                      <ul className="space-y-1.5">
-                        {MEGA[c.name].map((s) => (
-                          <li key={s}>
-                            <Link to={`/category/${c.slug}?sub=${s}`} className="text-sm hover:text-gold">{s}</Link>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )}
               </li>
             ))}
           </ul>

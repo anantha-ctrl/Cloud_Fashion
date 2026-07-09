@@ -95,7 +95,7 @@ export default function Login() {
       </button>
 
       <p className="mt-4 rounded-xl bg-gold/5 p-3 text-center text-xs text-gray-400">
-        Demo — Admin: admin@cloudfashion.com / Admin@123 · Customer: customer@cloudfashion.com / Test@123
+        Demo — Admin: admin@novaclothing.com / Admin@123 · Customer: customer@novaclothing.com / Test@123
       </p>
     </AuthShell>
   );

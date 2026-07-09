@@ -97,7 +97,7 @@ class Mailer
     /** Live brand name (admin-editable in Settings), used across every email. */
     public static function brand(): string
     {
-        return (string) Setting::get('store_name', 'Nova Clothing');
+        return (string) Setting::get('store_name', 'Novo Clothing');
     }
 
     public static function otpTemplate(string $name, string $otp): string

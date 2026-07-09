@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import MobileTabBar from './components/MobileTabBar';
@@ -40,6 +41,7 @@ const AdminProductForm = lazy(() => import('./admin/AdminProductForm'));
 const AdminCategories = lazy(() => import('./admin/AdminCategories'));
 const AdminOrders = lazy(() => import('./admin/AdminOrders'));
 const AdminBilling = lazy(() => import('./admin/AdminBilling'));
+const AdminInvoices = lazy(() => import('./admin/AdminInvoices'));
 const AdminStaff = lazy(() => import('./admin/AdminStaff'));
 const CashierLayout = lazy(() => import('./admin/CashierLayout'));
 const AdminCustomers = lazy(() => import('./admin/AdminCustomers'));
@@ -57,6 +59,15 @@ const AUTH_ROUTES = ['/login', '/register', '/verify-otp', '/forgot-password', '
 
 export default function App() {
   const { pathname } = useLocation();
+  const { user } = useAuth();
+
+  // A cashier is locked to the billing counter: every other route (storefront,
+  // admin, static pages) bounces to /cashier. Logging out clears `user`, which
+  // removes the lock so the login/storefront flow works again.
+  if (user?.role === 'cashier' && !pathname.startsWith('/cashier')) {
+    return <Navigate to="/cashier" replace />;
+  }
+
   // Admin + cashier both ship their own layout header — no storefront chrome.
   const isAdmin = pathname.startsWith('/admin') || pathname.startsWith('/cashier');
   // Auth pages are a full-screen split — no storefront chrome around them.
@@ -111,6 +122,7 @@ export default function App() {
             <Route path="categories" element={<AdminCategories />} />
             <Route path="orders" element={<AdminOrders />} />
             <Route path="billing" element={<AdminBilling />} />
+            <Route path="invoices" element={<AdminInvoices />} />
             <Route path="customers" element={<AdminCustomers />} />
             <Route path="coupons" element={<AdminCoupons />} />
             <Route path="banners" element={<AdminBanners />} />

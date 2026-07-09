@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, Plus, Minus, Trash2, ShoppingCart, Receipt, Printer, X, Ban,
-  Calculator, IndianRupee, CreditCard, Smartphone, Wallet, User, ScrollText,
+  Calculator, Split, CreditCard, Smartphone, Wallet, User, ScrollText,
   ScanLine, Camera, CameraOff,
 } from 'lucide-react';
 import jsQR from 'jsqr';
@@ -14,7 +14,7 @@ const PAY = [
   ['cash', Wallet, 'Cash'],
   ['upi', Smartphone, 'UPI'],
   ['card', CreditCard, 'Card'],
-  ['other', IndianRupee, 'Other'],
+  ['split', Split, 'Split'],
 ];
 
 const money = (n) => `₹${(Number(n) || 0).toFixed(2)}`;
@@ -47,8 +47,11 @@ export default function AdminBilling() {
   const [taxPct, setTaxPct] = useState('0');
   const [pay, setPay] = useState('cash');
   const [paid, setPaid] = useState('');
+  const [splitCash, setSplitCash] = useState('');     // split: cash portion
+  const [splitDigital, setSplitDigital] = useState(''); // split: card/UPI portion
   const [custName, setCustName] = useState('');
   const [custPhone, setCustPhone] = useState('');
+  const [custEmail, setCustEmail] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
   const [invoice, setInvoice] = useState(null); // last saved bill for the invoice modal
@@ -60,9 +63,32 @@ export default function AdminBilling() {
   useEffect(() => {
     api.get('/api/admin/billing/config')
       .then((r) => { setConfig(r.data.data); setTaxPct(String(r.data.data.tax_pct ?? 0)); })
-      .catch(() => setConfig({ store_name: 'Nova Clothing', tax_pct: 0 }));
+      .catch(() => setConfig({ store_name: 'Novo Clothing', tax_pct: 0 }));
     loadHistory();
   }, []);
+
+  // Debounced auto-lookup customer by phone.
+  const lookupTimer = useRef(null);
+  useEffect(() => {
+    const cleanPhone = custPhone.trim();
+    if (cleanPhone.length < 10) return;
+    
+    clearTimeout(lookupTimer.current);
+    lookupTimer.current = setTimeout(() => {
+      api.get('/api/admin/billing/customer-lookup', { params: { phone: cleanPhone } })
+        .then((r) => {
+          if (r.data.data) {
+            const customer = r.data.data;
+            if (customer.name && !custName) setCustName(customer.name);
+            if (customer.email && !custEmail) setCustEmail(customer.email);
+            toast.success(`Found existing customer: ${customer.name}`);
+          }
+        })
+        .catch(() => {});
+    }, 500);
+    
+    return () => clearTimeout(lookupTimer.current);
+  }, [custPhone]);
 
   // Debounced live product search.
   const timer = useRef(null);
@@ -119,7 +145,8 @@ export default function AdminBilling() {
 
   const resetBill = () => {
     setCart([]); setDiscVal(''); setDiscType('flat'); setPay('cash');
-    setPaid(''); setCustName(''); setCustPhone(''); setNote('');
+    setPaid(''); setSplitCash(''); setSplitDigital('');
+    setCustName(''); setCustPhone(''); setCustEmail(''); setNote('');
     setTaxPct(String(config?.tax_pct ?? 0));
   };
 
@@ -131,13 +158,22 @@ export default function AdminBilling() {
     const taxable = Math.max(0, subtotal - discount);
     const tax = (taxable * Math.max(0, Number(taxPct) || 0)) / 100;
     const total = taxable + tax;
-    const paidNum = pay === 'cash' ? Number(paid) || 0 : total;
-    return { subtotal, discount, taxable, tax, total, change: Math.max(0, paidNum - total) };
-  }, [cart, discVal, discType, taxPct, pay, paid]);
+    const splitPaid = (Number(splitCash) || 0) + (Number(splitDigital) || 0);
+    const paidNum = pay === 'cash' ? Number(paid) || 0 : pay === 'split' ? splitPaid : total;
+    return {
+      subtotal, discount, taxable, tax, total,
+      splitPaid,
+      remaining: Math.max(0, total - splitPaid), // split: amount still to allocate
+      change: Math.max(0, paidNum - total),
+    };
+  }, [cart, discVal, discType, taxPct, pay, paid, splitCash, splitDigital]);
 
   const save = async () => {
     if (cart.length === 0) { toast.error('Add at least one item'); return; }
     if (pay === 'cash' && paid !== '' && Number(paid) < t.total) { toast.error('Amount paid is less than total'); return; }
+    if (pay === 'split' && t.splitPaid + 0.001 < t.total) {
+      toast.error(`Split short by ${money(t.remaining)} — cash + card/UPI must cover the total`); return;
+    }
     setSaving(true);
     try {
       const { data } = await api.post('/api/admin/billing', {
@@ -147,8 +183,11 @@ export default function AdminBilling() {
         tax_pct: Number(taxPct) || 0,
         payment_method: pay,
         paid: pay === 'cash' ? (Number(paid) || t.total) : t.total,
+        split_cash: pay === 'split' ? (Number(splitCash) || 0) : 0,
+        split_digital: pay === 'split' ? (Number(splitDigital) || 0) : 0,
         customer_name: custName,
         customer_phone: custPhone,
+        customer_email: custEmail,
         note,
       });
       toast.success(data.message);
@@ -266,6 +305,7 @@ export default function AdminBilling() {
                 <input value={custName} onChange={(e) => setCustName(e.target.value)} placeholder="Customer name" className="input !h-10 !py-0 text-sm" />
                 <input value={custPhone} onChange={(e) => setCustPhone(e.target.value)} placeholder="Phone" className="input !h-10 !py-0 text-sm" />
               </div>
+              <input value={custEmail} onChange={(e) => setCustEmail(e.target.value)} placeholder="Customer email (optional)" className="input !h-10 !py-0 text-sm w-full" />
 
               <div className="grid grid-cols-2 gap-2">
                 {/* Discount: ₹/% toggle + amount, as one aligned control */}
@@ -297,6 +337,38 @@ export default function AdminBilling() {
                 <div className="grid grid-cols-2 items-center gap-2">
                   <input type="number" min="0" value={paid} onChange={(e) => setPaid(e.target.value)} placeholder="Cash received" className="input !h-10 !py-0 text-sm" />
                   <span className="text-right text-sm text-gray-500">Change <b className="text-gold">{money(t.change)}</b></span>
+                </div>
+              )}
+
+              {pay === 'split' && (
+                <div className="space-y-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="relative">
+                      <Wallet size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="number" min="0" value={splitCash} onChange={(e) => setSplitCash(e.target.value)}
+                        placeholder="Cash" className="input !h-10 !py-0 !pl-8 text-sm" />
+                    </div>
+                    <div className="relative">
+                      <CreditCard size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <input type="number" min="0" value={splitDigital} onChange={(e) => setSplitDigital(e.target.value)}
+                        placeholder="Card / UPI" className="input !h-10 !py-0 !pl-8 text-sm" />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between text-xs">
+                    {t.remaining > 0 ? (
+                      <button type="button"
+                        onClick={() => setSplitDigital(((Number(splitDigital) || 0) + t.remaining).toFixed(2))}
+                        className="font-medium text-gold hover:underline">
+                        Fill remaining {money(t.remaining)} →
+                      </button>
+                    ) : (
+                      <span className="font-medium text-emerald-500">Covered ✓</span>
+                    )}
+                    <span className="text-gray-500">
+                      Paid <b className="text-gold">{money(t.splitPaid)}</b>
+                      {t.change > 0 && <> · Change <b className="text-gold">{money(t.change)}</b></>}
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -407,7 +479,7 @@ function Scanner({ onClose, onCode }) {
         <div className="flex items-center gap-2 p-4 text-sm text-gray-500">
           <Camera size={15} className="shrink-0 text-gold" />
           {last ? <span>Last scan: <b className="text-gold">{last}</b> — keep scanning to add more.</span>
-                : <span>Point the camera at a product QR code.</span>}
+            : <span>Point the camera at a product QR code.</span>}
         </div>
       </div>
     </div>
@@ -480,46 +552,93 @@ function History({ data, onView, onVoid }) {
 
 function InvoiceModal({ bill, config, onClose }) {
   const printInvoice = () => {
-    const w = window.open('', '_blank', 'width=420,height=640');
+    const w = window.open('', '_blank', 'width=360,height=680');
     if (!w) { toast.error('Allow pop-ups to print'); return; }
-    const rows = bill.items.map((i) =>
-      `<tr><td>${escapeHtml(i.product_name)}${i.sku ? `<br><span class="sku">${escapeHtml(i.sku)}</span>` : ''}</td>
-       <td class="c">${i.quantity}</td><td class="r">${money(i.price)}</td><td class="r">${money(i.line_total)}</td></tr>`).join('');
-    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${bill.bill_number}</title>
+
+    const d = new Date(bill.created_at);
+    const when = `${d.toLocaleDateString('en-GB')} ${d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`;
+    const totalQty = bill.items.reduce((s, i) => s + Number(i.quantity), 0);
+
+    const items = bill.items.map((i) => `
+      <div class="it">
+        <div class="nm">${escapeHtml(i.product_name)}</div>
+        <div class="row sub">
+          <span>${i.quantity} x ${money(i.price)}</span>
+          <span>${money(i.line_total)}</span>
+        </div>
+        ${i.sku ? `<div class="sku">SKU: ${escapeHtml(i.sku)}</div>` : ''}
+      </div>`).join('');
+
+    const metaRow = (k, v) => v ? `<div class="row"><span>${k}</span><span>${escapeHtml(String(v))}</span></div>` : '';
+    const totRow  = (k, v, cls = '') => `<div class="row ${cls}"><span>${k}</span><span>${v}</span></div>`;
+
+    // Store logo — admin-uploaded (Settings → Brand) or the bundled monogram.
+    const logoSrc = config.logo || `${window.location.origin}/logo.png`;
+
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(bill.bill_number)}</title>
       <style>
-        *{font-family:'Segoe UI',Arial,sans-serif;box-sizing:border-box}
-        body{margin:0;padding:16px;color:#111;font-size:12px}
-        h1{font-size:18px;margin:0;text-align:center;letter-spacing:1px}
-        .sub{text-align:center;color:#666;font-size:11px;margin:2px 0}
-        .meta{margin:12px 0;font-size:11px;color:#333;display:flex;justify-content:space-between}
-        table{width:100%;border-collapse:collapse;margin-top:6px}
-        th,td{padding:5px 4px;border-bottom:1px solid #eee;vertical-align:top;text-align:left}
-        th{border-bottom:1px solid #999;font-size:10px;text-transform:uppercase;color:#555}
-        .c{text-align:center}.r{text-align:right}.sku{color:#999;font-size:9px}
-        .tot{margin-top:8px;font-size:12px}
-        .tot div{display:flex;justify-content:space-between;padding:2px 0}
-        .grand{font-weight:700;font-size:15px;border-top:1px solid #999;margin-top:4px;padding-top:6px}
-        .foot{text-align:center;color:#666;margin-top:16px;font-size:11px;border-top:1px dashed #ccc;padding-top:10px}
-        .void{color:#e11d48;text-align:center;font-weight:700;border:2px solid #e11d48;padding:4px;margin:8px 0}
-      </style></head><body onload="window.print()">
-      <h1>${escapeHtml(config.store_name || 'Nova Clothing')}</h1>
-      ${config.address ? `<p class="sub">${escapeHtml(config.address)}</p>` : ''}
-      ${config.phone ? `<p class="sub">${escapeHtml(config.phone)}</p>` : ''}
+        *{margin:0;padding:0;box-sizing:border-box;font-family:'Courier New','Roboto Mono',monospace}
+        @page{size:80mm auto;margin:0}
+        body{width:80mm;padding:10px 10px 16px;color:#000;font-size:12px;line-height:1.45;-webkit-print-color-adjust:exact}
+        .center{text-align:center}
+        .logo{max-height:70px;max-width:60%;width:auto;object-fit:contain;margin:0 auto 6px;display:block}
+        .brand{font-size:18px;font-weight:700;letter-spacing:2px;text-transform:uppercase}
+        .muted{font-size:11px;color:#000}
+        .hr{border-top:1px dashed #000;margin:7px 0}
+        .hr-solid{border-top:1px solid #000;margin:7px 0}
+        .row{display:flex;justify-content:space-between;gap:10px}
+        .row span:last-child{white-space:nowrap;text-align:right}
+        .it{margin:4px 0}
+        .nm{font-weight:700;word-break:break-word}
+        .sub{padding-left:2px}
+        .sku{font-size:10px;color:#444;padding-left:2px}
+        .tot{font-size:15px;font-weight:700}
+        .foot{text-align:center;font-size:11px;margin-top:6px}
+        .void{border:2px solid #000;text-align:center;font-weight:700;letter-spacing:3px;padding:4px;margin:8px 0}
+        .tag{text-align:center;font-size:11px;letter-spacing:1px;margin-top:2px}
+      </style></head><body onload="setTimeout(function(){window.print()},60)">
+      <div class="center">
+        <img class="logo" src="${logoSrc}" alt="" onerror="this.style.display='none'" />
+        <div class="brand">${escapeHtml(config.store_name || 'Novo Clothing')}</div>
+        ${config.address ? `<div class="muted">${escapeHtml(config.address)}</div>` : ''}
+        ${config.phone ? `<div class="muted">Ph: ${escapeHtml(config.phone)}</div>` : ''}
+        ${config.email ? `<div class="muted">${escapeHtml(config.email)}</div>` : ''}
+      </div>
+
+      <div class="tag">*** TAX INVOICE ***</div>
       ${bill.status === 'void' ? '<div class="void">VOID</div>' : ''}
-      <div class="meta">
-        <div><b>${bill.bill_number}</b><br>${new Date(bill.created_at).toLocaleString('en-IN')}</div>
-        <div style="text-align:right">${bill.customer_name ? escapeHtml(bill.customer_name) + '<br>' : ''}${bill.customer_phone ? escapeHtml(bill.customer_phone) : ''}</div>
-      </div>
-      <table><thead><tr><th>Item</th><th class="c">Qty</th><th class="r">Price</th><th class="r">Total</th></tr></thead><tbody>${rows}</tbody></table>
-      <div class="tot">
-        <div><span>Subtotal</span><span>${money(bill.subtotal)}</span></div>
-        ${bill.discount > 0 ? `<div><span>Discount</span><span>− ${money(bill.discount)}</span></div>` : ''}
-        ${bill.tax_amount > 0 ? `<div><span>Tax (${bill.tax_pct}%)</span><span>${money(bill.tax_amount)}</span></div>` : ''}
-        <div class="grand"><span>TOTAL</span><span>${money(bill.total)}</span></div>
-        <div><span>Paid (${bill.payment_method})</span><span>${money(bill.paid)}</span></div>
-        ${bill.change_due > 0 ? `<div><span>Change</span><span>${money(bill.change_due)}</span></div>` : ''}
-      </div>
-      <p class="foot">${escapeHtml(config.footer_note || 'Thank you!')}</p>
+      <div class="hr"></div>
+
+      ${metaRow('Bill No', bill.bill_number)}
+      ${metaRow('Date', when)}
+      ${metaRow('Cashier', bill.cashier)}
+      ${metaRow('Customer', bill.customer_name)}
+      ${metaRow('Phone', bill.customer_phone)}
+      <div class="hr"></div>
+
+      <div class="row" style="font-weight:700"><span>ITEM</span><span>AMOUNT</span></div>
+      <div class="hr"></div>
+      ${items}
+      <div class="hr"></div>
+
+      ${totRow('Subtotal', money(bill.subtotal))}
+      ${bill.discount > 0 ? totRow('Discount', '- ' + money(bill.discount)) : ''}
+      ${bill.tax_amount > 0 ? totRow(`Tax (${bill.tax_pct}%)`, money(bill.tax_amount)) : ''}
+      <div class="hr-solid"></div>
+      ${totRow('TOTAL', money(bill.total), 'tot')}
+      <div class="hr-solid"></div>
+
+      ${totRow('Paid (' + (bill.payment_method || '').toUpperCase() + ')', money(bill.paid))}
+      ${bill.payment_method === 'split' ? totRow('&nbsp;&nbsp;Cash', money(bill.split_cash)) + totRow('&nbsp;&nbsp;Card / UPI', money(bill.split_digital)) : ''}
+      ${bill.change_due > 0 ? totRow('Change', money(bill.change_due)) : ''}
+      <div class="hr"></div>
+
+      <div class="row muted"><span>Items: ${bill.items.length}</span><span>Qty: ${totalQty}</span></div>
+      <div class="hr"></div>
+
+      <div class="foot">${escapeHtml(config.footer_note || 'Thank you for shopping with us!')}</div>
+      <div class="foot muted">Goods once sold are not returnable without this bill.</div>
+      <div class="foot" style="margin-top:8px">- - - - - - - - - - - - - - - -</div>
       </body></html>`);
     w.document.close();
   };
@@ -553,6 +672,12 @@ function InvoiceModal({ bill, config, onClose }) {
             {bill.tax_amount > 0 && <Row label={`Tax (${bill.tax_pct}%)`} value={money(bill.tax_amount)} />}
             <div className="flex justify-between pt-1 text-base font-bold"><span>Total</span><span className="text-gold">{money(bill.total)}</span></div>
             <Row label={`Paid (${bill.payment_method})`} value={money(bill.paid)} />
+            {bill.payment_method === 'split' && (
+              <>
+                <Row label="— Cash" value={money(bill.split_cash)} />
+                <Row label="— Card / UPI" value={money(bill.split_digital)} />
+              </>
+            )}
             {bill.change_due > 0 && <Row label="Change" value={money(bill.change_due)} />}
           </div>
         </div>

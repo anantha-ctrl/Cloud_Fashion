@@ -2,7 +2,7 @@
 --   Powers the premium landing hero + brand-story quote, live from the DB.
 
 INSERT INTO settings (`key`, `value`) VALUES
-  ('landing_hero_eyebrow',  'Nova Clothing — Est. Elegance'),
+  ('landing_hero_eyebrow',  'Novo Clothing — Est. Elegance'),
   ('landing_hero_title',    'We don''t sell clothes.'),
   ('landing_hero_accent',   'We create confidence.'),
   ('landing_hero_subtitle', 'Editorial fashion, crafted in India — designed to make every moment feel like a statement.'),

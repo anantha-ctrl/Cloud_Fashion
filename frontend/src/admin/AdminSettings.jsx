@@ -7,7 +7,7 @@ import { Spinner } from '../components/ui';
 // [key, label, placeholder, type]
 const SECTIONS = [
   ['Brand', Store, [
-    ['store_name', 'Store name', 'Nova Clothing', 'text'],
+    ['store_name', 'Store name', 'Novo Clothing', 'text'],
     ['store_logo', 'Store logo', 'Transparent PNG · wide ~240×80 · shown in header, footer & admin', 'image'],
   ]],
   ['Contact (shown on Contact page)', Mail, [
@@ -28,7 +28,7 @@ const SECTIONS = [
     ['store_whatsapp', 'WhatsApp number (intl, no +)', '919876543210', 'text'],
   ]],
   ['Homepage — landing hero & story', Sparkles, [
-    ['landing_hero_eyebrow', 'Hero eyebrow (small label)', 'Nova Clothing — Est. Elegance', 'text'],
+    ['landing_hero_eyebrow', 'Hero eyebrow (small label)', 'Novo Clothing — Est. Elegance', 'text'],
     ['landing_hero_title', 'Hero headline — line 1', "We don't sell clothes.", 'text'],
     ['landing_hero_accent', 'Hero headline — line 2 (gold)', 'We create confidence.', 'text'],
     ['landing_hero_subtitle', 'Hero subtitle', 'Editorial fashion, crafted in India…', 'textarea'],
@@ -47,7 +47,7 @@ const SECTIONS = [
   ['Billing / POS (in-store invoice)', Receipt, [
     ['billing_tax_pct', 'Default tax / GST (%)', '0', 'number'],
     ['billing_invoice_prefix', 'Invoice number prefix', 'INV', 'text'],
-    ['billing_footer_note', 'Invoice footer note', 'Thank you for shopping with Nova Clothing!', 'text'],
+    ['billing_footer_note', 'Invoice footer note', 'Thank you for shopping with Novo Clothing!', 'text'],
   ]],
 ];
 
@@ -70,7 +70,7 @@ function ImageField({ label, value, onChange, hint }) {
       <div className="mt-1 flex items-center gap-3">
         <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-black/10 bg-black/5 dark:border-white/10">
           {value ? <img src={value} alt="" className="h-full w-full object-cover" />
-                 : <span className="flex h-full w-full items-center justify-center text-gray-300"><ImageIcon size={18} /></span>}
+            : <span className="flex h-full w-full items-center justify-center text-gray-300"><ImageIcon size={18} /></span>}
         </div>
         <div className="flex-1">
           <div className="flex gap-2">

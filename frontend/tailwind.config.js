@@ -51,12 +51,32 @@ export default {
           '66%': { transform: 'translate(-20px,20px) scale(0.95)' },
         },
         marquee: { '0%': { transform: 'translateX(0)' }, '100%': { transform: 'translateX(-50%)' } },
+        fadeInUp: {
+          '0%': { opacity: '0', transform: 'translateY(20px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
+        scaleIn: {
+          '0%': { opacity: '0', transform: 'scale(0.95)' },
+          '100%': { opacity: '1', transform: 'scale(1)' },
+        },
+        slideInRight: {
+          '0%': { opacity: '0', transform: 'translateX(20px)' },
+          '100%': { opacity: '1', transform: 'translateX(0)' },
+        },
+        countUp: {
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
       },
       animation: {
         float: 'float 6s ease-in-out infinite',
         shimmer: 'shimmer 1.5s infinite',
         blob: 'blob 18s ease-in-out infinite',
         marquee: 'marquee 30s linear infinite',
+        'fade-in-up': 'fadeInUp 0.5s ease-out both',
+        'scale-in': 'scaleIn 0.4s ease-out both',
+        'slide-in-right': 'slideInRight 0.4s ease-out both',
+        'count-up': 'countUp 0.6s ease-out both',
       },
     },
   },

@@ -53,7 +53,7 @@ export default function LandingFooter() {
         </div>
 
         <div className="mt-16 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-8 text-sm text-white/40 sm:flex-row">
-          <p>© {new Date().getFullYear()} Nova Clothing. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Novo Clothing. All rights reserved.</p>
           <p>Designed and Developed By <a href="https://cloudhawk.in/">CloudHawk</a>.</p>
         </div>
       </div>

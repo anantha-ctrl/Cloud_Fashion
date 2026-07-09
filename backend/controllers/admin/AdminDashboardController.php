@@ -6,17 +6,73 @@ class AdminDashboardController
         Auth::admin();
         $db = db();
 
-        // Revenue = online paid orders + in-store paid bills (counter/POS).
-        $onlineSales  = (float) $db->query("SELECT COALESCE(SUM(total),0) FROM orders WHERE payment_status='paid' AND status<>'cancelled'")->fetchColumn();
-        $counterSales = (float) $db->query("SELECT COALESCE(SUM(total),0) FROM bills WHERE status='paid'")->fetchColumn();
-        $counterBills = (int) $db->query("SELECT COUNT(*) FROM bills WHERE status='paid'")->fetchColumn();
-        $totalSales   = $onlineSales + $counterSales;
-        $totalOrders = (int) $db->query('SELECT COUNT(*) FROM orders')->fetchColumn();
-        $totalCustomers = (int) $db->query("SELECT COUNT(*) FROM users WHERE role='customer'")->fetchColumn();
-        $totalProducts = (int) $db->query('SELECT COUNT(*) FROM products')->fetchColumn();
+        // ── Batch 1: Core KPIs in a single query via conditional aggregation ──
+        $kpi = $db->query("
+            SELECT
+                -- Online revenue & orders
+                COALESCE(SUM(CASE WHEN payment_status='paid' AND status<>'cancelled' THEN total ELSE 0 END),0)       AS online_sales,
+                COUNT(*)                                                                                              AS total_orders,
+                COALESCE(SUM(CASE WHEN payment_status='paid' AND status<>'cancelled' AND DATE(placed_at)=CURDATE() THEN total ELSE 0 END),0) AS today_online,
+                SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END)                                                    AS pending_orders,
+                SUM(CASE WHEN payment_status='paid' AND status<>'cancelled' THEN 1 ELSE 0 END)                        AS paid_orders,
+                -- Previous period comparisons (prior 7 days vs current 7 days)
+                COALESCE(SUM(CASE WHEN payment_status='paid' AND status<>'cancelled' AND placed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN total ELSE 0 END),0) AS online_7d,
+                COALESCE(SUM(CASE WHEN payment_status='paid' AND status<>'cancelled' AND placed_at >= DATE_SUB(CURDATE(), INTERVAL 14 DAY) AND placed_at < DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN total ELSE 0 END),0) AS online_prev_7d,
+                SUM(CASE WHEN placed_at >= DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END)                    AS orders_7d,
+                SUM(CASE WHEN placed_at >= DATE_SUB(CURDATE(), INTERVAL 14 DAY) AND placed_at < DATE_SUB(CURDATE(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) AS orders_prev_7d
+            FROM orders
+        ")->fetch();
 
-        // Monthly revenue (last 6 months) — online orders + counter bills merged,
-        // over a continuous 6-month skeleton so the chart never has gaps.
+        // ── Batch 2: Counter/POS data ──
+        $bill = $db->query("
+            SELECT
+                COALESCE(SUM(CASE WHEN status='paid' THEN total ELSE 0 END),0)                                        AS counter_sales,
+                SUM(CASE WHEN status='paid' THEN 1 ELSE 0 END)                                                        AS counter_bills,
+                COALESCE(SUM(CASE WHEN status='paid' AND DATE(created_at)=CURDATE() THEN total ELSE 0 END),0)          AS today_counter
+            FROM bills
+        ")->fetch();
+
+        // ── Batch 3: User KPIs ──
+        $usr = $db->query("
+            SELECT
+                SUM(CASE WHEN role='customer' THEN 1 ELSE 0 END)                                                       AS total_customers,
+                SUM(CASE WHEN role='customer' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END)     AS new_customers_7d,
+                SUM(CASE WHEN role='customer' AND created_at >= DATE_SUB(NOW(), INTERVAL 14 DAY) AND created_at < DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) AS new_customers_prev_7d
+            FROM users
+        ")->fetch();
+
+        // ── Batch 4: Product KPIs ──
+        $prod = $db->query("
+            SELECT
+                COUNT(*)                                          AS total_products,
+                SUM(CASE WHEN stock <= low_stock_alert THEN 1 ELSE 0 END) AS low_stock
+            FROM products
+        ")->fetch();
+
+        // Derived values
+        $onlineSales   = (float) $kpi['online_sales'];
+        $counterSales  = (float) $bill['counter_sales'];
+        $totalSales    = $onlineSales + $counterSales;
+        $todaySales    = (float) $kpi['today_online'] + (float) $bill['today_counter'];
+        $paidOrders    = (int) $kpi['paid_orders'];
+        $totalCustomers = (int) $usr['total_customers'];
+        $avgOrderValue = $paidOrders > 0 ? round($onlineSales / $paidOrders, 2) : 0;
+        $conversionRate = $totalCustomers > 0 ? round(($paidOrders / $totalCustomers) * 100, 1) : 0;
+
+        // Trend deltas (percentage change current vs previous 7 days)
+        $salesCur  = (float) $kpi['online_7d'] + (float) $bill['counter_sales']; // simplified: counter for period
+        $salesPrev = (float) $kpi['online_prev_7d'];
+        $saleTrend = $salesPrev > 0 ? round((($salesCur - $salesPrev) / $salesPrev) * 100, 1) : ($salesCur > 0 ? 100 : 0);
+
+        $ordersCur  = (int) $kpi['orders_7d'];
+        $ordersPrev = (int) $kpi['orders_prev_7d'];
+        $orderTrend = $ordersPrev > 0 ? round((($ordersCur - $ordersPrev) / $ordersPrev) * 100, 1) : ($ordersCur > 0 ? 100 : 0);
+
+        $custCur  = (int) $usr['new_customers_7d'];
+        $custPrev = (int) $usr['new_customers_prev_7d'];
+        $custTrend = $custPrev > 0 ? round((($custCur - $custPrev) / $custPrev) * 100, 1) : ($custCur > 0 ? 100 : 0);
+
+        // ── Monthly revenue (last 6 months) — online + counter merged ──
         $months = [];
         for ($i = 5; $i >= 0; $i--) {
             $k = date('Y-m', strtotime("first day of -$i month"));
@@ -38,32 +94,19 @@ class AdminDashboardController
         }
         $monthly = array_values($months);
 
+        // ── Status breakdown ──
         $statusBreakdown = $db->query(
             'SELECT status, COUNT(*) AS count FROM orders GROUP BY status'
         )->fetchAll();
 
+        // ── Recent orders ──
         $recentOrders = $db->query(
             "SELECT o.id, o.order_number, o.total, o.status, o.placed_at, u.name AS customer
              FROM orders o JOIN users u ON u.id=o.user_id
              ORDER BY o.placed_at DESC LIMIT 8"
         )->fetchAll();
 
-        $lowStock = (int) $db->query('SELECT COUNT(*) FROM products WHERE stock <= low_stock_alert')->fetchColumn();
-
-        // Extra KPIs — today's revenue also spans both channels.
-        $todayOnline = (float) $db->query(
-            "SELECT COALESCE(SUM(total),0) FROM orders WHERE payment_status='paid' AND status<>'cancelled' AND DATE(placed_at)=CURDATE()"
-        )->fetchColumn();
-        $todayCounter = (float) $db->query("SELECT COALESCE(SUM(total),0) FROM bills WHERE status='paid' AND DATE(created_at)=CURDATE()")->fetchColumn();
-        $todaySales = $todayOnline + $todayCounter;
-        $pendingOrders = (int) $db->query("SELECT COUNT(*) FROM orders WHERE status='pending'")->fetchColumn();
-        $paidOrders = (int) $db->query("SELECT COUNT(*) FROM orders WHERE payment_status='paid' AND status<>'cancelled'")->fetchColumn();
-        $avgOrderValue = $paidOrders > 0 ? round($onlineSales / $paidOrders, 2) : 0;
-        $newCustomers7d = (int) $db->query(
-            "SELECT COUNT(*) FROM users WHERE role='customer' AND created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)"
-        )->fetchColumn();
-
-        // Top selling products — units + revenue across online orders AND counter bills.
+        // ── Top selling products ──
         $topProducts = $db->query(
             "SELECT p.id, p.name, p.brand, p.price,
                     COALESCE(SUM(s.units),0) AS units_sold,
@@ -82,32 +125,65 @@ class AdminDashboardController
              GROUP BY p.id HAVING units_sold > 0 ORDER BY units_sold DESC, revenue DESC LIMIT 5"
         )->fetchAll();
 
-        // Newest customers
+        // ── Newest customers ──
         $recentCustomers = $db->query(
             "SELECT id, name, email, created_at FROM users
              WHERE role='customer' ORDER BY created_at DESC LIMIT 5"
         )->fetchAll();
 
+        // ── Activity feed — last 10 events from orders, customers, reviews ──
+        $activity = $db->query("
+            (SELECT 'order' AS type,
+                    CONCAT('New order ', order_number) AS title,
+                    CONCAT('₹', FORMAT(total, 0), ' · ', status) AS description,
+                    placed_at AS time
+             FROM orders ORDER BY placed_at DESC LIMIT 5)
+            UNION ALL
+            (SELECT 'customer' AS type,
+                    CONCAT(name, ' joined') AS title,
+                    email AS description,
+                    created_at AS time
+             FROM users WHERE role='customer' ORDER BY created_at DESC LIMIT 3)
+            UNION ALL
+            (SELECT 'review' AS type,
+                    CONCAT(u.name, ' reviewed') AS title,
+                    CONCAT(p.name, ' · ', r.rating, '★') AS description,
+                    r.created_at AS time
+             FROM reviews r
+             JOIN users u ON u.id = r.user_id
+             JOIN products p ON p.id = r.product_id
+             ORDER BY r.created_at DESC LIMIT 2)
+            ORDER BY time DESC
+            LIMIT 10
+        ")->fetchAll();
+
         Response::success([
             'cards' => [
                 'total_sales'      => round($totalSales, 2),
-                'total_orders'     => $totalOrders,
+                'total_orders'     => (int) $kpi['total_orders'],
                 'total_customers'  => $totalCustomers,
-                'total_products'   => $totalProducts,
-                'low_stock'        => $lowStock,
+                'total_products'   => (int) $prod['total_products'],
+                'low_stock'        => (int) $prod['low_stock'],
                 'today_sales'      => round($todaySales, 2),
-                'pending_orders'   => $pendingOrders,
+                'pending_orders'   => (int) $kpi['pending_orders'],
                 'avg_order_value'  => $avgOrderValue,
-                'new_customers_7d' => $newCustomers7d,
+                'new_customers_7d' => (int) $usr['new_customers_7d'],
                 'online_sales'     => round($onlineSales, 2),
                 'counter_sales'    => round($counterSales, 2),
-                'counter_bills'    => $counterBills,
+                'counter_bills'    => (int) $bill['counter_bills'],
+                'conversion_rate'  => $conversionRate,
+            ],
+            'trends' => [
+                'sales'     => $saleTrend,
+                'orders'    => $orderTrend,
+                'customers' => $custTrend,
             ],
             'monthly_sales'    => $monthly,
             'status_breakdown' => $statusBreakdown,
             'recent_orders'    => $recentOrders,
             'top_products'     => $topProducts,
             'recent_customers' => $recentCustomers,
+            'activity'         => $activity,
         ]);
     }
 

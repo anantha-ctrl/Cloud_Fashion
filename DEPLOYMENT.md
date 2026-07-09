@@ -1,4 +1,4 @@
-# Nova Clothing — Deployment Guide
+# Novo Clothing — Deployment Guide
 
 This covers local (XAMPP) setup and production deployment of the **PHP API** and the
 **React frontend**.
@@ -13,13 +13,14 @@ This covers local (XAMPP) setup and production deployment of the **PHP API** and
    - phpMyAdmin → Import → `database/cloudfashion.sql`, **or**
    - `mysql -u root -p < database/cloudfashion.sql`
    ```bash
-   # apply every migration in order (002 → 021)
+   # apply every migration in order (002 → 023)
    for f in database/migration_*.sql; do mysql -u root -p cloudfashion < "$f"; done
    ```
-   > The migrations add reviews moderation, returns, loyalty/referrals, the `settings`
+   > The migrations add reviews moderation, returns, loyalty points, the `settings`
    > key/value store, the Contact Us inbox, the landing-page content settings, the
-   > **billing / POS** tables (`bills`, `bill_items`) and the **cashier** role.
-   > Skipping them disables those features.
+   > **billing / POS** tables (`bills`, `bill_items`), the **cashier** role,
+   > **split payment** (`split_cash` / `split_digital`) and the **storefront scope**
+   > (`storefront_category`, e.g. a men-only store). Skipping them disables those features.
 4. Backend config: copy `backend/.env.example` → `backend/.env`, set `DB_PASS` and a strong `JWT_SECRET`.
 5. Frontend:
    ```bash
@@ -89,8 +90,9 @@ This covers local (XAMPP) setup and production deployment of the **PHP API** and
    - `GOOGLE_CLIENT_ID` (if using Google Sign-In)
    - `FRONTEND_URL=https://yourdomain.com`
    > After deploy, set the store's brand name + **logo**, public details, announcement bar,
-   > free-shipping threshold, socials, loyalty rules and **billing tax/invoice** settings from
-   > **Admin → Settings / Loyalty** (stored in DB). Create **cashier** logins under **Admin → Cashiers**.
+   > free-shipping threshold, socials, loyalty rules, **billing tax/invoice** settings and
+   > (optionally) the **storefront category scope** from **Admin → Settings / Loyalty** (stored
+   > in DB). Create **cashier** logins under **Admin → Cashiers**.
 4. Point a domain/subdomain (e.g. `api.yourdomain.com`) at the `backend/` directory.
 5. **Apache:** ensure `AllowOverride All` so `.htaccess` works.
    **Nginx:** route all non-file requests to `index.php`:
@@ -133,7 +135,7 @@ This covers local (XAMPP) setup and production deployment of the **PHP API** and
 - [ ] Restrict CORS `Access-Control-Allow-Origin` to your domain
 - [ ] Live Razorpay keys + webhook (optional) for payment reconciliation
 - [ ] SMTP configured and deliverability tested
-- [ ] All migrations (002 → 021) applied after the base schema
+- [ ] All migrations (002 → 023) applied after the base schema
 - [ ] Google OAuth origins updated to the production domain (if used)
 - [ ] Store details / loyalty rules set in **Admin → Settings / Loyalty**
 - [ ] Database backups scheduled

@@ -6,10 +6,10 @@ import { Spinner } from '../components/ui';
 
 export default function AdminCategories() {
   const [cats, setCats] = useState(null);
-  const [form, setForm] = useState({ id: null, name: '', description: '', image_url: '', is_active: 1 });
+  const [form, setForm] = useState({ id: null, name: '', description: '', image_url: '', parent_id: '', is_active: 1 });
   const [show, setShow] = useState(false);
 
-  const load = () => api.get('/api/categories').then((r) => setCats(r.data.data)).catch(() => {});
+  const load = () => api.get('/api/admin/categories').then((r) => setCats(r.data.data)).catch(() => {});
   useEffect(() => { load(); }, []);
 
   const save = async (e) => {
@@ -18,7 +18,7 @@ export default function AdminCategories() {
       if (form.id) await api.put(`/api/admin/categories/${form.id}`, form);
       else await api.post('/api/admin/categories', form);
       toast.success('Saved');
-      setShow(false); setForm({ id: null, name: '', description: '', image_url: '', is_active: 1 });
+      setShow(false); setForm({ id: null, name: '', description: '', image_url: '', parent_id: '', is_active: 1 });
       load();
     } catch (err) { toast.error(err.message); }
   };
@@ -36,7 +36,7 @@ export default function AdminCategories() {
     e.target.value = ''; // allow re-selecting the same file
   };
 
-  const edit = (c) => { setForm({ id: c.id, name: c.name, description: c.description || '', image_url: c.image_url || '', is_active: c.is_active }); setShow(true); };
+  const edit = (c) => { setForm({ id: c.id, name: c.name, description: c.description || '', image_url: c.image_url || '', parent_id: c.parent_id || '', is_active: c.is_active }); setShow(true); };
   const del = async (id) => { if (!confirm('Delete category? Products in it will be removed.')) return; await api.delete(`/api/admin/categories/${id}`); toast.success('Deleted'); load(); };
 
   if (!cats) return <Spinner />;
@@ -45,7 +45,7 @@ export default function AdminCategories() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-2xl font-bold">Categories</h1>
-        <button onClick={() => { setForm({ id: null, name: '', description: '', image_url: '', is_active: 1 }); setShow(true); }} className="btn-gold !py-2 text-sm"><Plus size={16} /> Add</button>
+        <button onClick={() => { setForm({ id: null, name: '', description: '', image_url: '', parent_id: '', is_active: 1 }); setShow(true); }} className="btn-gold !py-2 text-sm"><Plus size={16} /> Add</button>
       </div>
 
       {show && (
@@ -68,6 +68,15 @@ export default function AdminCategories() {
             </label>
           )}
 
+          {/* Parent category — nest under another (e.g. men's sub-categories show
+              on a men-only storefront). "None" makes it a top-level category. */}
+          <select className="input" value={form.parent_id}
+            onChange={(e) => setForm({ ...form, parent_id: e.target.value })}>
+            <option value="">Top-level category (no parent)</option>
+            {cats.filter((c) => c.id !== form.id).map((c) => (
+              <option key={c.id} value={c.id}>Under: {c.name}</option>
+            ))}
+          </select>
           <input className="input sm:col-span-2" placeholder="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <div className="flex gap-3">
             <button className="btn-gold">{form.id ? 'Update' : 'Create'}</button>
@@ -81,7 +90,9 @@ export default function AdminCategories() {
           <div key={c.id} className="card flex items-center justify-between p-5">
             <div>
               <p className="font-semibold">{c.name}</p>
-              <p className="text-sm text-gray-400">{c.product_count} products</p>
+              <p className="text-sm text-gray-400">
+                {c.product_count} products{c.parent_name ? ` · under ${c.parent_name}` : ''}
+              </p>
             </div>
             <div className="flex gap-1">
               <button onClick={() => edit(c)} className="rounded-lg p-2 hover:bg-gold/10"><Pencil size={16} /></button>

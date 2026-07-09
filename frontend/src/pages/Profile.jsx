@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { User, Lock, MapPin, Plus, Trash2, Star } from 'lucide-react';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { User, Lock, MapPin, Plus, Trash2, Star, ArrowLeft } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/client';
 import PasswordInput from '../components/PasswordInput';
@@ -13,6 +13,7 @@ const emptyAddr = { full_name: '', phone: '', line1: '', line2: '', city: '', st
 export default function Profile() {
   const { user, updateUser } = useAuth();
   const [params, setParams] = useSearchParams();
+  const navigate = useNavigate();
   const initial = TAB_KEYS.includes(params.get('tab')) ? params.get('tab') : 'profile';
   const [tab, setTab] = useState(initial);
 
@@ -27,6 +28,17 @@ export default function Profile() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-10">
+      <div className="mb-6 flex items-center justify-between">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-gray-500 hover:text-gold transition">
+          <ArrowLeft size={16} /> Back
+        </button>
+        {user?.role === 'admin' && (
+          <Link to="/admin" className="text-sm font-medium text-gold hover:text-gold-light transition">
+            Go to Admin Dashboard →
+          </Link>
+        )}
+      </div>
+
       <h1 className="mb-8 font-display text-3xl font-bold">My Account</h1>
 
       {/* Mobile: horizontal scrollable tab bar (the desktop sidebar is hidden) */}
@@ -88,9 +100,6 @@ function RewardsTab() {
   useEffect(() => { api.get('/api/loyalty').then((r) => setData(r.data.data)).catch(() => {}); }, []);
   if (!data) return <div className="card p-6 text-sm text-gray-400">Loading…</div>;
 
-  const link = `${window.location.origin}/register?ref=${data.referral_code}`;
-  const copy = (text, label) => { navigator.clipboard.writeText(text); toast.success(`${label} copied`); };
-
   return (
     <div className="space-y-6">
       <div className="card flex items-center justify-between p-6">
@@ -102,19 +111,6 @@ function RewardsTab() {
           </p>
         </div>
         <Star size={56} className="fill-gold/20 text-gold/40" />
-      </div>
-
-      <div className="card p-6">
-        <h3 className="font-semibold">Refer &amp; Earn</h3>
-        <p className="mt-1 text-sm text-gray-400">
-          Share your code. Your friend gets {data.signup_bonus} points on signup, and you get {data.referral_bonus} points when they place their first order.
-        </p>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="rounded-lg border border-gold/40 bg-gold/5 px-4 py-2 font-mono font-bold text-gold">{data.referral_code}</span>
-          <button onClick={() => copy(data.referral_code, 'Code')} className="btn-outline !py-2 text-sm">Copy code</button>
-          <button onClick={() => copy(link, 'Invite link')} className="btn-gold !py-2 text-sm">Copy invite link</button>
-        </div>
-        {data.referred_count > 0 && <p className="mt-3 text-sm text-gray-400">You've referred {data.referred_count} friend(s). 🎉</p>}
       </div>
 
       <div className="card p-6">

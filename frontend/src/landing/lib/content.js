@@ -28,7 +28,7 @@ export const SEASONS = [
 ];
 
 export const TESTIMONIALS = [
-  { name: 'Aarohi Menon', role: 'Creative Director', quote: 'Nova Clothing feels less like shopping and more like being styled by someone who truly gets me.', img: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80' },
+  { name: 'Aarohi Menon', role: 'Creative Director', quote: 'Novo Clothing feels less like shopping and more like being styled by someone who truly gets me.', img: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&w=200&q=80' },
   { name: 'Kabir Rao', role: 'Architect', quote: 'The fit, the fabric, the finish — every detail whispers quality. This is how premium should feel.', img: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&w=200&q=80' },
   { name: 'Meera Nair', role: 'Photographer', quote: 'I get compliments every single time. Timeless pieces that never try too hard.', img: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=200&q=80' },
   { name: 'Dev Sharma', role: 'Entrepreneur', quote: 'Effortless elegance, delivered. The confidence it gives me is worth every rupee.', img: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=200&q=80' },

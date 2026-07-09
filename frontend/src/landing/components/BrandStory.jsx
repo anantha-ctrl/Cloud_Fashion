@@ -25,7 +25,7 @@ export default function BrandStory({ quote }) {
           transition={{ duration: 0.7 }}
           className="mb-10 text-xs uppercase tracking-[0.5em] text-luxe-bronze"
         >
-          The Nova Clothing Story
+          The Novo Clothing Story
         </motion.p>
 
         {/* word-by-word fill on scroll */}

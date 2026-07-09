@@ -23,7 +23,7 @@ export default function AdminProductForm() {
   const [loading, setLoading] = useState(editing);
 
   useEffect(() => {
-    api.get('/api/categories').then((r) => setCats(r.data.data)).catch(() => {});
+    api.get('/api/admin/categories').then((r) => setCats(r.data.data)).catch(() => {});
     if (editing) {
       // Load product via admin list (kept simple); fetch single via public slug not available by id, so use list.
       api.get('/api/admin/products').then((r) => {

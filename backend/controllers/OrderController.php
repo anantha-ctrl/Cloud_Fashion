@@ -299,23 +299,13 @@ class OrderController
         }
         $db->prepare('DELETE FROM cart WHERE user_id=?')->execute([$userId]);
 
-        // ---- Loyalty & referrals ----
+        // ---- Loyalty points ----
         // Redeem the points the customer applied, then credit points earned.
         if (!empty($d['points_used'])) {
             LoyaltyController::award($db, $userId, -(int) $d['points_used'], 'redeem', $orderId, 'Redeemed at checkout');
         }
         if (!empty($d['points_earned'])) {
             LoyaltyController::award($db, $userId, (int) $d['points_earned'], 'earn', $orderId, 'Earned on order ' . $d['order_number']);
-        }
-        // Reward the referrer on this customer's FIRST order.
-        $orderCount = (int) $db->query("SELECT COUNT(*) FROM orders WHERE user_id=" . (int) $userId . " AND status<>'cancelled'")->fetchColumn();
-        if ($orderCount === 1) {
-            $rb = $db->prepare('SELECT referred_by FROM users WHERE id=?');
-            $rb->execute([$userId]);
-            $referrerId = (int) $rb->fetchColumn();
-            if ($referrerId) {
-                LoyaltyController::award($db, $referrerId, LoyaltyController::config()['loyalty_referral_bonus'], 'referral', $orderId, 'Friend placed their first order');
-            }
         }
 
         // Send order-confirmation email (best effort; never breaks the flow).

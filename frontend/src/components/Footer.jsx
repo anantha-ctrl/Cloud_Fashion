@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Instagram, Facebook, Twitter, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
@@ -8,7 +8,12 @@ import Logo from './Logo';
 
 export default function Footer() {
   const [email, setEmail] = useState('');
+  const [cats, setCats] = useState([]);
   const store = useStore();
+
+  // Shop links come live from the DB categories (respects the storefront scope,
+  // e.g. a men-only store) — no dead links to categories that don't exist.
+  useEffect(() => { api.get('/api/categories').then((r) => setCats(r.data.data)).catch(() => {}); }, []);
 
   // Only show socials that have a real URL configured in admin settings.
   const SOCIALS = [
@@ -41,11 +46,10 @@ export default function Footer() {
         </div>
 
         <FooterCol title="Shop">
-          <FLink to="/category/men">Men</FLink>
-          <FLink to="/category/women">Women</FLink>
-          <FLink to="/category/kids">Kids</FLink>
-          <FLink to="/category/footwear">Footwear</FLink>
-          <FLink to="/category/accessories">Accessories</FLink>
+          <FLink to="/shop">All Products</FLink>
+          {cats.map((c) => (
+            <FLink key={c.id} to={`/category/${c.slug}`}>{c.name}</FLink>
+          ))}
         </FooterCol>
 
         <FooterCol title="Company">

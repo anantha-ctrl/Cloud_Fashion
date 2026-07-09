@@ -1,6 +1,30 @@
 <?php
 class AdminCategoryController
 {
+    /**
+     * GET /api/admin/categories — every category for management, unscoped.
+     * (The public /api/categories is limited by the storefront scope, e.g. a
+     * men-only store; admins must always see and manage the full list.)
+     */
+    public function index(array $p): void
+    {
+        Auth::admin();
+        $rows = db()->query(
+            'SELECT c.*, p.name AS parent_name,
+                    (SELECT COUNT(*) FROM products WHERE category_id=c.id AND is_active=1) AS product_count
+             FROM categories c
+             LEFT JOIN categories p ON p.id = c.parent_id
+             ORDER BY c.name'
+        )->fetchAll();
+        foreach ($rows as &$r) {
+            $r['id']            = (int) $r['id'];
+            $r['product_count'] = (int) $r['product_count'];
+            $r['is_active']     = (int) $r['is_active'];
+        }
+        unset($r);
+        Response::success($rows);
+    }
+
     public function store(array $p): void
     {
         Auth::admin();
@@ -24,9 +48,11 @@ class AdminCategoryController
         Auth::admin();
         $data = Request::body();
         $id = (int) $p['id'];
-        db()->prepare('UPDATE categories SET name=?, image_url=?, description=?, is_active=? WHERE id=?')
+        // A category cannot be its own parent.
+        $parentId = !empty($data['parent_id']) && (int) $data['parent_id'] !== $id ? (int) $data['parent_id'] : null;
+        db()->prepare('UPDATE categories SET name=?, parent_id=?, image_url=?, description=?, is_active=? WHERE id=?')
             ->execute([
-                $data['name'], $data['image_url'] ?? null, $data['description'] ?? null,
+                $data['name'], $parentId, $data['image_url'] ?? null, $data['description'] ?? null,
                 isset($data['is_active']) ? (int) $data['is_active'] : 1, $id,
             ]);
         Response::success(null, 'Category updated');

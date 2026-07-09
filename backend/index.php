@@ -1,6 +1,6 @@
 <?php
 /**
- * Front controller / router for the Nova Clothing API.
+ * Front controller / router for the Novo Clothing API.
  */
 require_once __DIR__ . '/bootstrap.php';
 

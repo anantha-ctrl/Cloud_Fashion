@@ -39,7 +39,7 @@ export default function BrandIntro({ image }) {
 
         <Reveal delay={0.1} className="relative">
           <div className="relative overflow-hidden rounded-luxe-lg shadow-luxe">
-            <motion.img style={{ y }} src={image || IMG.intro} alt="Nova Clothing craftsmanship"
+            <motion.img style={{ y }} src={image || IMG.intro} alt="Novo Clothing craftsmanship"
               className="aspect-[4/5] w-full scale-110 object-cover" />
           </div>
           {/* floating accent card */}
