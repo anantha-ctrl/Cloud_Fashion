@@ -10,12 +10,12 @@ import RecentlyViewed from '../components/RecentlyViewed';
 import OffersStrip from '../components/OffersStrip';
 
 const SLIDES = [
-  { title: 'Summer Couture', subtitle: 'New Season Arrivals', cta: 'Shop Women', to: '/category/women',
-    img: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=1600' },
   { title: 'Sharp & Tailored', subtitle: 'The Menswear Edit', cta: 'Shop Men', to: '/category/men',
     img: 'https://images.unsplash.com/photo-1488161628813-04466f872be2?w=1600' },
-  { title: 'Step Into Style', subtitle: 'Footwear Drop', cta: 'Shop Footwear', to: '/category/footwear',
-    img: 'https://images.unsplash.com/photo-1460353581641-37baddab0fa2?w=1600' },
+  { title: 'Everyday Essentials', subtitle: 'The T-Shirt Edit', cta: 'Shop T-Shirts', to: '/category/t-shirts',
+    img: 'https://images.unsplash.com/photo-1516257984-b1b4d707412e?w=1600' },
+  { title: 'Elevated Staples', subtitle: 'New Season Arrivals', cta: 'Shop New In', to: '/shop?sort=newest',
+    img: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?w=1600' },
 ];
 
 export default function Home() {

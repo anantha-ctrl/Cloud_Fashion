@@ -1,7 +1,7 @@
 import { Helmet } from 'react-helmet-async';
 import { useStore } from '../context/StoreContext';
 
-const DEFAULT_DESC = 'Premium fashion, curated for the modern wardrobe. Shop menswear, womenswear, kids, footwear & accessories.';
+const DEFAULT_DESC = 'Premium menswear, curated for the modern man. Shop tailored shirts, tees, trousers & elevated everyday staples.';
 
 /**
  * Per-page SEO: title, description, and Open Graph / Twitter tags.

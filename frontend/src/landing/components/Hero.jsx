@@ -255,7 +255,7 @@ function EditorialHero({ c }) {
               <ArrowRight size={17} className="transition-transform group-hover:translate-x-1" />
             </MagneticButton>
             <MagneticButton
-              to="/category/women"
+              to="/category/men"
               strength={0.25}
               className="rounded-full border border-white/40 px-8 py-4 text-sm font-semibold text-white transition hover:border-white hover:bg-white/10"
             >

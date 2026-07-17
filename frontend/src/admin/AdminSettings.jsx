@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Save, Store, Mail, Megaphone, Share2, Sparkles, Image as ImageIcon, Upload, Receipt } from 'lucide-react';
+import { Save, Store, Mail, Megaphone, Share2, Sparkles, Image as ImageIcon, Upload, Receipt, QrCode } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../api/client';
 import { Spinner } from '../components/ui';
@@ -40,14 +40,21 @@ const SECTIONS = [
     ['landing_img_hero', 'Hero background image', 'Landscape 16:9 · 1920×1080 · keep subject centred', 'image'],
     ['landing_img_intro', 'Brand-intro image', 'Portrait 4:5 · 1000×1250', 'image'],
     ['landing_img_men', 'Men collection image', 'Portrait 4:5 · 1000×1250', 'image'],
-    ['landing_img_women', 'Women collection image', 'Portrait 4:5 · 1000×1250', 'image'],
-    ['landing_img_kids', 'Kids collection image', 'Portrait 4:5 · 1000×1250', 'image'],
     ['landing_img_newarrival', 'New-arrival banner image', 'Landscape 16:9 · 1920×1080 · keep subject centred', 'image'],
   ]],
   ['Billing / POS (in-store invoice)', Receipt, [
     ['billing_tax_pct', 'Default tax / GST (%)', '0', 'number'],
     ['billing_invoice_prefix', 'Invoice number prefix', 'INV', 'text'],
     ['billing_footer_note', 'Invoice footer note', 'Thank you for shopping with Novo Clothing!', 'text'],
+  ]],
+  ['Online payment — UPI / QR (customers pay & upload proof; you approve)', QrCode, [
+    ['upi_id', 'UPI ID (leave empty to disable online payment)', 'novoclothing@okaxis', 'text'],
+    ['upi_payee_name', 'Payee name shown to customer', 'Novo Clothing', 'text'],
+    ['upi_qr_image', 'Custom QR image (optional — auto-generated with amount if empty)', 'Square · 600×600 · your printed UPI QR', 'image'],
+    ['bank_account_name', 'Bank account holder name (optional)', 'Novo Clothing', 'text'],
+    ['bank_account_number', 'Bank account number (optional)', '1234567890', 'text'],
+    ['bank_ifsc', 'Bank IFSC (optional)', 'HDFC0001234', 'text'],
+    ['bank_name', 'Bank name (optional)', 'HDFC Bank', 'text'],
   ]],
 ];
 

@@ -11,7 +11,7 @@ Auth: send `Authorization: Bearer <token>` for protected routes.
 ## Auth
 | Method | Endpoint | Auth | Body |
 |---|---|---|---|
-| POST | `/api/auth/register` | – | `name, email, password, password_confirmation, phone?, referral_code?` |
+| POST | `/api/auth/register` | – | `name, email, password, password_confirmation, phone?` |
 | POST | `/api/auth/verify-otp` | – | `email, otp` → returns `{token, user}` |
 | POST | `/api/auth/resend-otp` | – | `email` |
 | POST | `/api/auth/login` | – | `email, password` → `{token, user}` |
@@ -53,20 +53,21 @@ Auth: send `Authorization: Bearer <token>` for protected routes.
 |---|---|---|
 | POST | `/api/coupons/apply` | `code, subtotal` |
 | GET | `/api/shipping-info` | first-order-free flag, free-shipping threshold + flat fee (from settings) |
-| POST | `/api/checkout/create-order` | `address_id, coupon_code?, points_redeem?` → razorpay order |
+| POST | `/api/checkout/create-order` | `address_id, coupon_code?, points_redeem?` → razorpay order (gateway path — optional) |
 | POST | `/api/checkout/verify` | `order_id, razorpay_*` (or `is_test`) |
 | POST | `/api/orders/cod` | `address_id, coupon_code?, points_redeem?` |
+| POST | `/api/orders/upi` | `address_id, coupon_code?, points_redeem?, txn_id, screenshot` — UPI/QR: places the order as **awaiting verification** (`payment_approval=pending`), stores the proof, emails the admin. Stock committed only on admin approval. |
 | GET | `/api/orders` · `/api/orders/{id}` | `{id}` also returns each item's `my_review` + any `return` record |
 | PUT | `/api/orders/{id}/cancel` | restocks items |
 | POST | `/api/orders/{id}/reorder` | re-adds the order's items to the cart |
 | POST | `/api/orders/{id}/return` | `reason, items?` — RMA request on a **delivered** order |
 
-## Loyalty & Referrals (✓)
+## Loyalty (✓)
 | Method | Endpoint | Notes |
 |---|---|---|
-| GET | `/api/loyalty` | balance, referral code, referred count, history, and live rules (`earn_rate_pct, earn_cap, redeem_cap_pct, point_value, signup_bonus, referral_bonus`) |
+| GET | `/api/loyalty` | balance, history, and live rules (`earn_rate_pct, earn_cap, redeem_cap_pct, point_value`) |
 
-Earning is capped per order (`earn_cap`); points redeem at `point_value` ₹ each, up to `redeem_cap_pct` of the payable amount. Referral codes are passed at register (`referral_code`); the referrer is rewarded once, on the friend's first order.
+Earning is capped per order (`earn_cap`); points redeem at `point_value` ₹ each, up to `redeem_cap_pct` of the payable amount. *(The referral programme was removed; loyalty points remain.)*
 
 ## Misc
 | Method | Endpoint | Notes |
@@ -74,6 +75,7 @@ Earning is capped per order (`earn_cap`); points redeem at `point_value` ₹ eac
 | POST | `/api/newsletter` | `email` |
 | POST | `/api/contact` | `name, email, subject?, message` — saved to DB + emailed (reply-to sender) |
 | GET | `/api/store-info` | public store config: name, contact, announcement, free-shipping min, socials, WhatsApp |
+| GET | `/api/payment-info` | public checkout payee details: `upi_enabled, upi_id, payee_name, qr_image, bank_name, account_name, account_number, ifsc` |
 | GET | `/api/offers` | active coupons for the offers strip |
 | GET | `/api/banners` | active homepage banners |
 | POST | `/api/notify-stock` | `product_id, email` (back-in-stock) |
@@ -95,8 +97,10 @@ Earning is capped per order (`earn_cap`); points redeem at `point_value` ₹ eac
 | GET | `/api/admin/inventory` · `/api/admin/inventory/low-stock` | |
 | PUT | `/api/admin/inventory/{id}` | update stock |
 | POST/PUT/DELETE | `/api/admin/categories[/{id}]` | image upload supported |
-| GET | `/api/admin/orders?status=` | |
+| GET | `/api/admin/orders?status=` | includes `payment_approval`, `payment_method`, `payment_txn_id` |
 | PUT | `/api/admin/orders/{id}/status` | carrier + tracking, emails customer |
+| GET | `/api/admin/orders/{id}/payment` | UPI proof: `payment_txn_id`, `payment_screenshot`, approval + customer |
+| PUT | `/api/admin/orders/{id}/payment` | `action: approve\|reject, note?` — approve commits stock/loyalty + emails; reject marks failed + emails |
 | GET | `/api/admin/customers[/{id}]` | |
 | GET/POST/PUT/DELETE | `/api/admin/banners[/{id}]` | |
 | GET/POST/PUT/DELETE | `/api/admin/coupons[/{id}]` | |
@@ -106,14 +110,14 @@ Earning is capped per order (`earn_cap`); points redeem at `point_value` ₹ eac
 | GET | `/api/admin/returns` | RMA list |
 | PUT | `/api/admin/returns/{id}` | approve/reject/refund → restock + email |
 | GET | `/api/admin/loyalty` | customers, KPIs, current rules |
-| PUT | `/api/admin/loyalty/settings` | edit rules (earn rate, cap, point value, redeem cap, bonuses) |
-| GET | `/api/admin/loyalty/{id}` | one customer's history + referrals |
+| PUT | `/api/admin/loyalty/settings` | edit rules (earn rate, cap, point value, redeem cap) |
+| GET | `/api/admin/loyalty/{id}` | one customer's points history |
 | POST | `/api/admin/loyalty/{id}/adjust` | `points (±), note?` manual credit/debit |
 | GET | `/api/admin/messages` | Contact Us inbox + unread count |
 | PUT | `/api/admin/messages/{id}` | `is_read` |
 | DELETE | `/api/admin/messages/{id}` | delete |
 | GET | `/api/admin/settings` | store settings |
-| PUT | `/api/admin/settings` | save store settings (name, contact, inbox, announcement, free-shipping min/fee, socials, WhatsApp) |
+| PUT | `/api/admin/settings` | save store settings (name, contact, inbox, announcement, free-shipping min/fee, socials, WhatsApp, landing copy/images, billing tax/prefix/footer, **UPI id/payee/QR + bank account/IFSC**) |
 
 ### Error codes
 `401` unauthenticated · `403` forbidden / unverified email · `404` not found ·

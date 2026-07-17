@@ -27,6 +27,7 @@ const Register = lazy(() => import('./pages/auth/Register'));
 const VerifyOtp = lazy(() => import('./pages/auth/VerifyOtp'));
 const ForgotPassword = lazy(() => import('./pages/auth/ForgotPassword'));
 const ResetPassword = lazy(() => import('./pages/auth/ResetPassword'));
+const VerifyOrder = lazy(() => import('./pages/VerifyOrder'));
 const About = lazy(() => import('./pages/static/About'));
 const Contact = lazy(() => import('./pages/static/Contact'));
 const Privacy = lazy(() => import('./pages/static/Privacy'));
@@ -74,7 +75,9 @@ export default function App() {
   const isAuth = AUTH_ROUTES.some((r) => pathname.startsWith(r));
   // The landing page ships its own premium nav + footer — no shared chrome.
   const isLanding = pathname === '/';
-  const bare = isAdmin || isAuth || isLanding;
+  // Public invoice-verification page (scanned at delivery) renders its own chrome.
+  const isVerify = pathname.startsWith('/verify-order');
+  const bare = isAdmin || isAuth || isLanding || isVerify;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -103,6 +106,9 @@ export default function App() {
           <Route path="/verify-otp" element={<VerifyOtp />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
+
+          {/* Public order verification (invoice QR scan) */}
+          <Route path="/verify-order/:id" element={<VerifyOrder />} />
 
           {/* Static */}
           <Route path="/about" element={<About />} />

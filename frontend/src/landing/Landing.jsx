@@ -41,7 +41,7 @@ export default function Landing() {
         <BrandIntro image={content?.intro_image} />
         <CategorySection />
 
-        {/* Men / Women / Kids — one reusable component, three stories */}
+        {/* Men — the store is a men-only collection */}
         <CollectionShowcase
           index="01"
           eyebrow="Men"
@@ -50,27 +50,6 @@ export default function Landing() {
           image={content?.men_image || IMG.men}
           to="/category/men"
           cta="Explore Men"
-        />
-        <CollectionShowcase
-          index="02"
-          eyebrow="Women"
-          title={['Bold.', 'Graceful.']}
-          description="From everyday luxe to statement occasion-wear — silhouettes that move with confidence."
-          image={content?.women_image || IMG.women}
-          to="/category/women"
-          cta="Explore Women"
-          reverse
-          dark
-          accent="text-luxe-gold"
-        />
-        <CollectionShowcase
-          index="03"
-          eyebrow="Kids"
-          title={['Playful.', 'Premium.']}
-          description="Soft, durable and joyfully designed — little wardrobes with big personality."
-          image={content?.kids_image || IMG.kids}
-          to="/category/kids"
-          cta="Explore Kids"
         />
 
         <BestSeller />

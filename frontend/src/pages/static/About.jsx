@@ -7,8 +7,8 @@ export default function About() {
         <p>Novo Clothing was born from a simple belief: premium style should feel effortless. We curate
           collections that blend timeless craftsmanship with contemporary design — pieces made to be worn,
           loved, and remembered.</p>
-        <p>From tailored menswear to flowing womenswear, playful kids' styles, statement footwear and refined
-          accessories, every product in our store is selected for quality, fit, and character.</p>
+        <p>From tailored shirts and everyday tees to smart trousers and elevated staples, every piece of
+          menswear in our store is selected for quality, fit, and character.</p>
         <p>We're a single-vendor boutique with a big heart — obsessed with detail, committed to sustainability,
           and dedicated to making your shopping experience as elegant as the clothes themselves.</p>
       </div>

@@ -131,6 +131,8 @@ class AdminInvoiceController
             $order[$f] = (float) ($order[$f] ?? 0);
         }
         $order['id'] = (int) $order['id'];
+        // Signed token for the invoice's delivery-verification QR.
+        $order['verify_token'] = OrderController::verifyToken($order['id'], $order['order_number']);
 
         Response::success($order);
     }

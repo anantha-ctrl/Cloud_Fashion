@@ -19,6 +19,72 @@ export function exportCsv(filename, rows, columns) {
   URL.revokeObjectURL(url);
 }
 
+/** Normalise a columns spec into [{ key, label }]. Falls back to the first row's keys. */
+function normCols(rows, columns) {
+  const cols = columns || Object.keys(rows[0]);
+  return cols.map((c) => (typeof c === 'object' ? { key: c.key, label: c.label || c.key } : { key: c, label: c }));
+}
+
+/** Trigger a browser download for a Blob. */
+function download(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+const escHtml = (v) =>
+  String(v == null ? '' : v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+/** Export rows to an Excel-compatible .xls (HTML table) file — opens natively in Excel. */
+export function exportExcel(filename, rows, columns) {
+  if (!rows?.length) return;
+  const cols = normCols(rows, columns);
+  const head = cols.map((c) => `<th>${escHtml(c.label)}</th>`).join('');
+  const body = rows
+    .map((r) => `<tr>${cols.map((c) => `<td>${escHtml(r[c.key])}</td>`).join('')}</tr>`)
+    .join('');
+  const html =
+    `<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"></head>` +
+    `<body><table border="1"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></body></html>`;
+  const blob = new Blob(['﻿', html], { type: 'application/vnd.ms-excel' });
+  download(blob, filename.endsWith('.xls') ? filename : `${filename}.xls`);
+}
+
+/** Open a print-ready window (browser "Save as PDF") with a titled table. */
+export function exportPdf(title, rows, columns) {
+  if (!rows?.length) return;
+  const cols = normCols(rows, columns);
+  const head = cols.map((c) => `<th>${escHtml(c.label)}</th>`).join('');
+  const body = rows
+    .map((r) => `<tr>${cols.map((c) => `<td>${escHtml(r[c.key])}</td>`).join('')}</tr>`)
+    .join('');
+  const when = new Date().toLocaleString();
+  const w = window.open('', '_blank');
+  if (!w) return;
+  w.document.write(
+    `<html><head><meta charset="utf-8"><title>${escHtml(title)}</title><style>` +
+      `*{font-family:Arial,Helvetica,sans-serif;-webkit-print-color-adjust:exact;print-color-adjust:exact}` +
+      `body{margin:24px;color:#111}` +
+      `h1{font-size:20px;margin:0 0 2px}` +
+      `.meta{color:#777;font-size:12px;margin-bottom:16px}` +
+      `table{width:100%;border-collapse:collapse;font-size:12px}` +
+      `th,td{border:1px solid #ddd;padding:8px 10px;text-align:left}` +
+      `thead th{background:#111;color:#fff}` +
+      `tbody tr:nth-child(even){background:#f6f6f6}` +
+      `@page{margin:14mm}` +
+      `</style></head><body>` +
+      `<h1>${escHtml(title)}</h1><div class="meta">Generated ${escHtml(when)} · ${rows.length} record(s)</div>` +
+      `<table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>` +
+      `</body></html>`
+  );
+  w.document.close();
+  w.focus();
+  setTimeout(() => { w.print(); }, 300);
+}
+
 /** Parse a CSV string into an array of row objects keyed by the header row. */
 export function parseCsv(text) {
   const rows = csvToRows(text.replace(/^﻿/, '')); // strip BOM

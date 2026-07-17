@@ -1,24 +1,80 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Download, FileText, FileSpreadsheet, FileDown, ChevronDown } from 'lucide-react';
 import api from '../api/client';
 import { inr, dateFmt } from '../utils/format';
+import { exportCsv, exportExcel, exportPdf } from '../utils/csv';
 import { Spinner } from '../components/ui';
 
 export default function AdminCustomers() {
   const [customers, setCustomers] = useState(null);
   const [detail, setDetail] = useState(null);
+  const [menu, setMenu] = useState(false);
+  const menuRef = useRef(null);
 
   useEffect(() => { api.get('/api/admin/customers').then((r) => setCustomers(r.data.data)).catch(() => {}); }, []);
   const open = (id) => api.get(`/api/admin/customers/${id}`).then((r) => setDetail(r.data.data)).catch(() => {});
 
+  useEffect(() => {
+    const onClick = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenu(false); };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, []);
+
   const isGeneratedEmail = (email, phone) => {
     return email && phone && email.startsWith(phone) && email.endsWith('@novoclothing.com');
+  };
+
+  const exportCols = [
+    { key: 'name', label: 'Name' },
+    { key: 'email', label: 'Email' },
+    { key: 'phone', label: 'Phone' },
+    { key: 'orders', label: 'Orders' },
+    { key: 'spent', label: 'Spent (₹)' },
+    { key: 'joined', label: 'Joined' },
+  ];
+  const exportRows = () =>
+    (customers || []).map((c) => ({
+      name: c.name || '',
+      email: isGeneratedEmail(c.email, c.phone) ? '' : (c.email || ''),
+      phone: c.phone || '',
+      orders: c.order_count ?? 0,
+      spent: Number(c.total_spent || 0),
+      joined: dateFmt(c.created_at),
+    }));
+  const doExport = (fmt) => {
+    const rows = exportRows();
+    if (!rows.length) return;
+    if (fmt === 'csv') exportCsv('customers', rows, exportCols);
+    if (fmt === 'excel') exportExcel('customers', rows, exportCols);
+    if (fmt === 'pdf') exportPdf('Customers', rows, exportCols);
+    setMenu(false);
   };
 
   if (!customers) return <Spinner />;
 
   return (
     <div className="space-y-6">
-      <h1 className="font-display text-2xl font-bold">Customers</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="font-display text-2xl font-bold">Customers</h1>
+        <div className="relative" ref={menuRef}>
+          <button onClick={() => setMenu((v) => !v)} className="btn-outline !py-2 text-sm" disabled={!customers.length}>
+            <Download size={16} /> Export <ChevronDown size={14} />
+          </button>
+          {menu && (
+            <div className="absolute right-0 z-20 mt-2 w-44 overflow-hidden rounded-xl border border-black/10 bg-white shadow-xl dark:border-white/10 dark:bg-neutral-900">
+              <button onClick={() => doExport('csv')} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-gold/10">
+                <FileText size={16} className="text-gray-400" /> CSV
+              </button>
+              <button onClick={() => doExport('excel')} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-gold/10">
+                <FileSpreadsheet size={16} className="text-gray-400" /> Excel
+              </button>
+              <button onClick={() => doExport('pdf')} className="flex w-full items-center gap-2 px-4 py-2.5 text-left text-sm hover:bg-gold/10">
+                <FileDown size={16} className="text-gray-400" /> PDF
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
       <div className="card overflow-x-auto">
         <table className="w-full min-w-[620px] text-sm">
           <thead className="text-left text-gray-400">

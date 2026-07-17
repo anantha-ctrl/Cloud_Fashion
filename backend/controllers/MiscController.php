@@ -150,6 +150,26 @@ class MiscController
         ]);
     }
 
+    /**
+     * Public payee details for the checkout UPI / QR payment panel.
+     * Returns the admin-configured UPI id, payee name, optional static QR image
+     * and bank-account details. No secrets here — a UPI id is meant to be shared.
+     */
+    public function paymentInfo(array $p): void
+    {
+        $upiId = Setting::get('upi_id', '');
+        Response::success([
+            'upi_enabled'    => $upiId !== '',
+            'upi_id'         => $upiId,
+            'payee_name'     => Setting::get('upi_payee_name', '') ?: Setting::get('store_name', 'Novo Clothing'),
+            'qr_image'       => Setting::get('upi_qr_image', ''),
+            'bank_name'      => Setting::get('bank_name', ''),
+            'account_name'   => Setting::get('bank_account_name', ''),
+            'account_number' => Setting::get('bank_account_number', ''),
+            'ifsc'           => Setting::get('bank_ifsc', ''),
+        ]);
+    }
+
     /** Public list of active, non-expired coupons (for the offers banner). */
     public function offers(array $p): void
     {

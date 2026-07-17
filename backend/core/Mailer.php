@@ -173,6 +173,33 @@ class Mailer
             $noteHtml");
     }
 
+    /** Sent to the store admin when a customer submits a UPI payment to verify. */
+    public static function upiPendingAdminTemplate(string $orderNumber, string $customer, string $phone, float $total, string $txnId): string
+    {
+        $amt = '₹' . number_format($total, 2);
+        $ph = $phone ? "<br>Phone: <b>$phone</b>" : '';
+        return self::shell("
+            <p style='font-size:15px'><b style='color:#c9a96a'>New UPI payment awaiting verification</b></p>
+            <p style='margin-top:14px;padding:12px 16px;background:#15151c;border-radius:10px'>
+                Order: <b style='color:#c9a96a'>$orderNumber</b><br>
+                Customer: <b>$customer</b>$ph<br>
+                Amount: <b>$amt</b><br>
+                Txn / Ref id: <b style='color:#c9a96a'>$txnId</b>
+            </p>
+            <p style='color:#aaa'>Open <b>Admin &rarr; Orders</b> to review the screenshot and approve or reject the payment.</p>");
+    }
+
+    /** Sent to the customer when their UPI payment could not be verified. */
+    public static function upiRejectedTemplate(string $name, string $orderNumber, ?string $note = null): string
+    {
+        $noteHtml = $note ? "<p style='margin-top:14px;padding:12px 16px;background:#15151c;border-radius:10px;color:#ddd'>Note from our team: $note</p>" : '';
+        return self::shell("
+            <p>Hi $name,</p>
+            <p>We couldn't verify the payment for your order <b style='color:#c9a96a'>$orderNumber</b>.</p>
+            <p style='color:#aaa'>If you've already paid, please reply with the correct transaction id / screenshot and we'll sort it out. Otherwise you can place the order again.</p>
+            $noteHtml");
+    }
+
     public static function resetTemplate(string $name, string $link): string
     {
         $brand = self::brand();

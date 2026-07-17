@@ -32,12 +32,14 @@ Checkout.jsx
     GET    /api/offers
     GET    /api/shipping-info               (✓)
     GET    /api/loyalty                     (✓)
+    GET    /api/payment-info                (UPI id / payee / QR / bank details)
     GET    /api/addresses                   (✓)
     POST   /api/addresses                   (✓)
     POST   /api/coupons/apply               (✓)
     POST   /api/orders/cod                  (✓, COD)
-    POST   /api/checkout/create-order       (✓, Razorpay)
-    POST   /api/checkout/verify             (✓, Razorpay)
+    POST   /api/orders/upi                  (✓, UPI/QR — txn id + screenshot)
+    # Razorpay endpoints (/api/checkout/create-order · /verify) remain available but
+    # are not used by the default checkout (online = admin-verified UPI/QR).
 
 Orders.jsx
     GET    /api/orders                      (✓)
@@ -155,6 +157,8 @@ AdminCategories.jsx
 AdminOrders.jsx
     GET    /api/admin/orders?status=
     PUT    /api/admin/orders/{id}/status    (carrier + tracking, emails)
+    GET    /api/admin/orders/{id}/payment   (UPI proof: txn id + screenshot)
+    PUT    /api/admin/orders/{id}/payment   (approve/reject → emails customer)
 
 AdminReturns.jsx
     GET    /api/admin/returns
@@ -167,6 +171,7 @@ AdminInventory.jsx
 AdminCustomers.jsx
     GET    /api/admin/customers
     GET    /api/admin/customers/{id}
+    # Export to CSV / Excel / PDF is generated client-side (no API call).
 
 AdminCoupons.jsx
     GET    /api/admin/coupons

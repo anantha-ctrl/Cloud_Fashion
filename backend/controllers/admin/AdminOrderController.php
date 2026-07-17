@@ -11,13 +11,96 @@ class AdminOrderController
             $args[] = $status;
         }
         $stmt = db()->prepare(
-            "SELECT o.id, o.order_number, o.total, o.status, o.payment_status, o.payment_method, o.placed_at,
-                    o.carrier, o.tracking_number, u.name AS customer, u.email
+            "SELECT o.id, o.order_number, o.total, o.status, o.payment_status, o.payment_method,
+                    o.payment_approval, o.payment_txn_id, o.payment_note, o.placed_at,
+                    o.carrier, o.tracking_number, u.name AS customer, u.email, u.phone
              FROM orders o JOIN users u ON u.id=o.user_id
              WHERE $where ORDER BY o.placed_at DESC"
         );
         $stmt->execute($args);
         Response::success($stmt->fetchAll());
+    }
+
+    /** GET /api/admin/orders/{id}/payment — the UPI proof (txn id + screenshot). */
+    public function paymentProof(array $p): void
+    {
+        Auth::admin();
+        $stmt = db()->prepare(
+            'SELECT o.id, o.order_number, o.total, o.payment_method, o.payment_status, o.payment_approval,
+                    o.payment_txn_id, o.payment_screenshot, o.payment_note, o.payment_reviewed_at,
+                    u.name AS customer, u.email, u.phone
+             FROM orders o JOIN users u ON u.id=o.user_id WHERE o.id=?'
+        );
+        $stmt->execute([(int) $p['id']]);
+        $row = $stmt->fetch();
+        if (!$row) {
+            Response::error('Order not found', 404);
+        }
+        $row['total'] = (float) $row['total'];
+        Response::success($row);
+    }
+
+    /**
+     * PUT /api/admin/orders/{id}/payment — approve or reject a manual UPI payment.
+     * Approve => confirm the order (stock/points committed, customer emailed).
+     * Reject  => mark failed with a note (customer emailed to re-submit).
+     */
+    public function reviewPayment(array $p): void
+    {
+        Auth::admin();
+        $id = (int) $p['id'];
+        $action = Request::input('action');
+        $note = trim((string) Request::input('note', '')) ?: null;
+        if (!in_array($action, ['approve', 'reject'], true)) {
+            Response::error('Invalid action', 422);
+        }
+
+        $db = db();
+        $stmt = $db->prepare('SELECT * FROM orders WHERE id=?');
+        $stmt->execute([$id]);
+        $order = $stmt->fetch();
+        if (!$order) {
+            Response::error('Order not found', 404);
+        }
+        if ($order['payment_method'] !== 'upi') {
+            Response::error('This order is not a UPI payment', 400);
+        }
+        if ($order['payment_approval'] === 'approved') {
+            Response::error('Payment already approved', 400);
+        }
+
+        $info = $db->prepare('SELECT name, email FROM users WHERE id=?');
+        $info->execute([(int) $order['user_id']]);
+        $user = $info->fetch() ?: ['name' => 'Customer', 'email' => ''];
+
+        if ($action === 'approve') {
+            $db->prepare(
+                "UPDATE orders
+                 SET payment_approval='approved', payment_status='paid', status='processing',
+                     payment_note=?, payment_reviewed_at=NOW()
+                 WHERE id=?"
+            )->execute([$note, $id]);
+            // Commit stock, coupon usage, loyalty points + send the confirmation email.
+            OrderController::finalizeFromDb($id);
+            Response::success(null, 'Payment approved — order confirmed');
+        }
+
+        // Reject: mark failed. Stock was never decremented, so nothing to restock.
+        $db->prepare(
+            "UPDATE orders
+             SET payment_approval='rejected', payment_status='failed',
+                 payment_note=?, payment_reviewed_at=NOW()
+             WHERE id=?"
+        )->execute([$note, $id]);
+
+        if ($user['email']) {
+            Mailer::send(
+                $user['email'],
+                Mailer::brand() . " · Payment could not be verified — Order {$order['order_number']}",
+                Mailer::upiRejectedTemplate($user['name'], $order['order_number'], $note)
+            );
+        }
+        Response::success(null, 'Payment rejected — customer notified');
     }
 
     public function updateStatus(array $p): void

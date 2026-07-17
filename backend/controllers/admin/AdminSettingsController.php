@@ -29,13 +29,19 @@ class AdminSettingsController
         'landing_img_hero'        => 'text',
         'landing_img_intro'       => 'text',
         'landing_img_men'         => 'text',
-        'landing_img_women'       => 'text',
-        'landing_img_kids'        => 'text',
         'landing_img_newarrival'  => 'text',
         // Billing / POS invoice defaults
         'billing_tax_pct'         => 'number',
         'billing_invoice_prefix'  => 'text',
         'billing_footer_note'     => 'text',
+        // Online UPI / QR payment (manual, admin-verified)
+        'upi_id'                  => 'text',
+        'upi_payee_name'          => 'text',
+        'upi_qr_image'            => 'text',
+        'bank_account_name'       => 'text',
+        'bank_account_number'     => 'text',
+        'bank_ifsc'               => 'text',
+        'bank_name'               => 'text',
     ];
 
     /** Current values for every known setting (any prefix). */
@@ -73,7 +79,7 @@ class AdminSettingsController
             }
             // Image uploads (store logo + landing images): push data URIs to Cloudinary
             // when configured, else store them inline (settings.value is MEDIUMTEXT).
-            $isImageKey = $key === 'store_logo' || str_starts_with($key, 'landing_img_');
+            $isImageKey = $key === 'store_logo' || $key === 'upi_qr_image' || str_starts_with($key, 'landing_img_');
             if ($isImageKey && str_starts_with($val, 'data:image')) {
                 $up = Cloudinary::upload($val, 'cloudfashion/branding');
                 if ($up) {

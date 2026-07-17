@@ -70,9 +70,11 @@ $router->post('/api/checkout/verify',       'CheckoutController@verify');
 
 // ---- Orders ----
 $router->get('/api/shipping-info',       'OrderController@shippingInfo');
+$router->get('/api/orders/verify/{id}',  'OrderController@verifyPublic'); // public — invoice QR scan
 $router->get('/api/orders',              'OrderController@index');
 $router->get('/api/orders/{id}',         'OrderController@show');
 $router->post('/api/orders/cod',         'OrderController@placeCod');
+$router->post('/api/orders/upi',         'OrderController@placeUpi');
 $router->put('/api/orders/{id}/cancel',  'OrderController@cancel');
 $router->post('/api/orders/{id}/reorder','OrderController@reorder');
 $router->post('/api/orders/{id}/return', 'ReturnController@request');
@@ -82,6 +84,7 @@ $router->get('/api/loyalty',             'LoyaltyController@index');
 $router->post('/api/newsletter',         'MiscController@newsletter');
 $router->post('/api/contact',            'MiscController@contact');
 $router->get('/api/store-info',          'MiscController@storeInfo');
+$router->get('/api/payment-info',        'MiscController@paymentInfo');
 $router->get('/api/landing',             'MiscController@landing');
 $router->get('/api/recently-viewed',     'MiscController@recentlyViewed');
 $router->post('/api/recently-viewed',    'MiscController@trackView');
@@ -114,8 +117,10 @@ $router->get('/api/admin/inventory/low-stock','AdminProductController@lowStock')
 $router->get('/api/admin/inventory',          'AdminProductController@inventory');
 $router->put('/api/admin/inventory/{id}',     'AdminProductController@updateStock');
 
-$router->get('/api/admin/orders',             'AdminOrderController@index');
-$router->put('/api/admin/orders/{id}/status', 'AdminOrderController@updateStatus');
+$router->get('/api/admin/orders',              'AdminOrderController@index');
+$router->put('/api/admin/orders/{id}/status',  'AdminOrderController@updateStatus');
+$router->get('/api/admin/orders/{id}/payment', 'AdminOrderController@paymentProof');
+$router->put('/api/admin/orders/{id}/payment', 'AdminOrderController@reviewPayment');
 
 // Unified invoices — online orders + counter bills in one view
 $router->get('/api/admin/invoices',             'AdminInvoiceController@index');

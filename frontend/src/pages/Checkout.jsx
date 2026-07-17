@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Check, Tag, CreditCard, Banknote, Star } from 'lucide-react';
+import { Plus, Check, Tag, QrCode, Banknote, Star, Upload, Copy, Loader2, ShieldCheck } from 'lucide-react';
 import toast from 'react-hot-toast';
+import QRCode from 'qrcode';
 import api from '../api/client';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
@@ -20,12 +21,17 @@ export default function Checkout() {
   const [coupon, setCoupon] = useState('');
   const [discount, setDiscount] = useState(0);
   const [appliedCode, setAppliedCode] = useState('');
-  const [method, setMethod] = useState('razorpay');
+  const [method, setMethod] = useState('upi');
   const [placing, setPlacing] = useState(false);
   const [offers, setOffers] = useState([]);
   const [shipInfo, setShipInfo] = useState(null);
   const [loyalty, setLoyalty] = useState(null);
   const [usePoints, setUsePoints] = useState(false);
+  // UPI / QR manual payment
+  const [payInfo, setPayInfo] = useState(null);   // admin-configured UPI/bank details
+  const [qrUrl, setQrUrl] = useState('');          // generated UPI QR (data URI)
+  const [txnId, setTxnId] = useState('');
+  const [screenshot, setScreenshot] = useState('');
 
   useEffect(() => {
     if (!cart.items.length) navigate('/cart');
@@ -33,6 +39,7 @@ export default function Checkout() {
     api.get('/api/offers').then((r) => setOffers(r.data.data)).catch(() => { });
     api.get('/api/shipping-info').then((r) => setShipInfo(r.data.data)).catch(() => { });
     api.get('/api/loyalty').then((r) => setLoyalty(r.data.data)).catch(() => { });
+    api.get('/api/payment-info').then((r) => setPayInfo(r.data.data)).catch(() => { });
   }, []);
 
   const loadAddresses = async () => {
@@ -95,15 +102,37 @@ export default function Checkout() {
   );
   const total = Math.max(0, subtotal - discount - redeemValue + shipping);
 
-  const loadRazorpay = () =>
-    new Promise((resolve) => {
-      if (window.Razorpay) return resolve(true);
-      const s = document.createElement('script');
-      s.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      s.onload = () => resolve(true);
-      s.onerror = () => resolve(false);
-      document.body.appendChild(s);
-    });
+  // Build the UPI intent + generate a QR that encodes the exact payable amount.
+  const upiEnabled = !!payInfo?.upi_enabled;
+  const upiLink = upiEnabled
+    ? `upi://pay?pa=${encodeURIComponent(payInfo.upi_id)}&pn=${encodeURIComponent(payInfo.payee_name || 'Novo Clothing')}&am=${total.toFixed(2)}&cu=INR&tn=${encodeURIComponent('Novo Clothing Order')}`
+    : '';
+  useEffect(() => {
+    if (method !== 'upi' || !upiEnabled) { setQrUrl(''); return; }
+    // Prefer the admin's custom QR image; else generate one from the UPI link.
+    if (payInfo.qr_image) { setQrUrl(payInfo.qr_image); return; }
+    QRCode.toDataURL(upiLink, { width: 260, margin: 1, color: { dark: '#0b0b0f', light: '#ffffff' } })
+      .then(setQrUrl).catch(() => setQrUrl(''));
+  }, [method, upiEnabled, upiLink, payInfo?.qr_image]);
+
+  const selectedAddr = addresses.find((a) => a.id === selected);
+  const custName = selectedAddr?.full_name || user?.name || '';
+  const custPhone = selectedAddr?.phone || user?.phone || '';
+
+  const copy = (text, label) => {
+    navigator.clipboard?.writeText(text).then(() => toast.success(`${label} copied`)).catch(() => {});
+  };
+
+  const pickScreenshot = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) { toast.error('Please choose an image file'); return; }
+    if (file.size > 5 * 1024 * 1024) { toast.error('Image too large (max 5 MB)'); return; }
+    const reader = new FileReader();
+    reader.onload = () => setScreenshot(reader.result);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
   const placeOrder = async () => {
     if (!selected) return toast.error('Please select a delivery address');
@@ -122,46 +151,24 @@ export default function Checkout() {
         return navigate(`/order-success/${data.data.order_id}`);
       }
 
-      // Razorpay flow
-      const { data } = await api.post('/api/checkout/create-order', payload);
-      const order = data.data;
+      // UPI / QR manual payment — customer submits transaction id + screenshot,
+      // order waits for admin verification.
+      if (!upiEnabled) return toast.error('Online payment is not available right now. Please choose Cash on Delivery.');
+      if (!txnId.trim()) return toast.error('Please enter the UPI transaction / reference id');
+      if (!screenshot) return toast.error('Please upload your payment screenshot');
 
-      if (order.is_test || !order.razorpay_key) {
-        // Keys not configured — simulate success so the flow is demoable end-to-end.
-        await api.post('/api/checkout/verify', { order_id: order.order_id, is_test: true });
-        toast.success('Payment successful (test mode)');
-        refresh();
-        return navigate(`/order-success/${order.order_id}`);
-      }
-
-      await loadRazorpay();
-      const rzp = new window.Razorpay({
-        key: order.razorpay_key,
-        amount: order.amount,
-        currency: order.currency,
-        name: 'Novo Clothing',
-        image: `${window.location.origin}/logo.png`,
-        description: `Order ${order.order_number}`,
-        order_id: order.razorpay_order_id,
-        prefill: { name: user.name, email: user.email, contact: user.phone || '' },
-        theme: { color: '#c9a96a' },
-        handler: async (resp) => {
-          await api.post('/api/checkout/verify', {
-            order_id: order.order_id,
-            razorpay_order_id: resp.razorpay_order_id,
-            razorpay_payment_id: resp.razorpay_payment_id,
-            razorpay_signature: resp.razorpay_signature,
-          });
-          toast.success('Payment successful');
-          refresh();
-          navigate(`/order-success/${order.order_id}`);
-        },
+      const { data } = await api.post('/api/orders/upi', {
+        ...payload, txn_id: txnId.trim(), screenshot,
       });
-      rzp.open();
+      toast.success('Payment submitted — awaiting verification');
+      refresh();
+      navigate(`/order-success/${data.data.order_id}`);
     } catch (err) {
       toast.error(err.message);
     } finally { setPlacing(false); }
   };
+
+  const upiReady = method !== 'upi' || (upiEnabled && txnId.trim() && screenshot);
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10">
@@ -208,11 +215,88 @@ export default function Checkout() {
           <section className="card p-6">
             <h2 className="mb-4 text-lg font-semibold">Payment Method</h2>
             <div className="grid gap-3 sm:grid-cols-2">
-              <PayOption active={method === 'razorpay'} onClick={() => setMethod('razorpay')} icon={CreditCard}
-                title="Pay Online" subtitle="Card / UPI / Netbanking via Razorpay" />
+              <PayOption active={method === 'upi'} onClick={() => setMethod('upi')} icon={QrCode}
+                title="Pay Online (UPI / QR)" subtitle="Scan the QR or pay to our UPI ID" />
               <PayOption active={method === 'cod'} onClick={() => setMethod('cod')} icon={Banknote}
                 title="Cash on Delivery" subtitle="Pay when you receive" />
             </div>
+
+            {/* UPI / QR payment panel */}
+            {method === 'upi' && (
+              <div className="mt-5 rounded-2xl border border-gold/30 bg-gold/[0.03] p-5">
+                {!payInfo ? (
+                  <p className="flex items-center gap-2 text-sm text-gray-400"><Loader2 size={16} className="animate-spin" /> Loading payment details…</p>
+                ) : !upiEnabled ? (
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    Online payment isn’t configured yet. Please choose <b>Cash on Delivery</b>, or ask the store to add a UPI ID in Admin → Settings.
+                  </p>
+                ) : (
+                  <div className="grid gap-6 md:grid-cols-2">
+                    {/* LEFT — scan QR / account details */}
+                    <div className="text-center">
+                      <p className="mb-1 text-sm font-semibold">Scan &amp; Pay</p>
+                      <p className="mb-3 text-xs text-gray-400">UPI apps: GPay, PhonePe, Paytm, BHIM</p>
+                      <div className="mx-auto inline-block rounded-2xl bg-white p-3 shadow-luxe">
+                        {qrUrl
+                          ? <img src={qrUrl} alt="UPI QR" className="h-44 w-44" />
+                          : <div className="flex h-44 w-44 items-center justify-center text-gray-400"><Loader2 className="animate-spin" /></div>}
+                      </div>
+                      <p className="mt-3 font-display text-2xl font-bold text-gold">{inr(total)}</p>
+
+                      <div className="mt-4 space-y-2 text-left text-sm">
+                        <DetailRow label="UPI ID" value={payInfo.upi_id} onCopy={() => copy(payInfo.upi_id, 'UPI ID')} />
+                        <DetailRow label="Payee" value={payInfo.payee_name} />
+                        {payInfo.account_number && (
+                          <>
+                            <div className="my-2 flex items-center gap-2 text-xs text-gray-400">
+                              <span className="h-px flex-1 bg-black/10 dark:bg-white/10" /> or bank transfer <span className="h-px flex-1 bg-black/10 dark:bg-white/10" />
+                            </div>
+                            <DetailRow label="A/C Name" value={payInfo.account_name} />
+                            <DetailRow label="A/C No." value={payInfo.account_number} onCopy={() => copy(payInfo.account_number, 'Account number')} />
+                            {payInfo.ifsc && <DetailRow label="IFSC" value={payInfo.ifsc} onCopy={() => copy(payInfo.ifsc, 'IFSC')} />}
+                            {payInfo.bank_name && <DetailRow label="Bank" value={payInfo.bank_name} />}
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* RIGHT — confirm your payment */}
+                    <div>
+                      <p className="mb-3 text-sm font-semibold">Confirm your payment</p>
+                      <div className="space-y-3 text-sm">
+                        <div className="grid grid-cols-2 gap-3">
+                          <ReadonlyField label="Name" value={custName || '—'} />
+                          <ReadonlyField label="Phone" value={custPhone || '—'} />
+                        </div>
+                        <label className="block">
+                          <span className="mb-1 block text-xs text-gray-400">UPI Transaction / Reference ID <span className="text-rose-500">*</span></span>
+                          <input className="input" placeholder="e.g. 4157XXXXXX123"
+                            value={txnId} onChange={(e) => setTxnId(e.target.value)} />
+                        </label>
+                        <div>
+                          <span className="mb-1 block text-xs text-gray-400">Payment screenshot <span className="text-rose-500">*</span></span>
+                          {screenshot ? (
+                            <div className="flex items-center gap-3">
+                              <img src={screenshot} alt="proof" className="h-16 w-16 rounded-lg border border-black/10 object-cover dark:border-white/10" />
+                              <button onClick={() => setScreenshot('')} className="text-xs text-rose-500 hover:underline">Remove</button>
+                            </div>
+                          ) : (
+                            <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-gold/50 px-4 py-6 text-sm text-gold hover:bg-gold/10">
+                              <Upload size={16} /> Upload screenshot
+                              <input type="file" accept="image/*" className="hidden" onChange={pickScreenshot} />
+                            </label>
+                          )}
+                        </div>
+                        <p className="flex items-start gap-1.5 rounded-lg bg-black/5 px-3 py-2 text-xs text-gray-500 dark:bg-white/5 dark:text-gray-400">
+                          <ShieldCheck size={14} className="mt-0.5 shrink-0 text-gold" />
+                          After you place the order, our team verifies the payment and confirms it. You’ll get an email once approved.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         </div>
 
@@ -287,9 +371,12 @@ export default function Checkout() {
             </p>
           )}
 
-          <button onClick={placeOrder} disabled={placing} className="btn-gold mt-6 w-full">
-            {placing ? 'Processing…' : method === 'cod' ? 'Place Order' : `Pay ${inr(total)}`}
+          <button onClick={placeOrder} disabled={placing || !upiReady} className="btn-gold mt-6 w-full disabled:opacity-60">
+            {placing ? 'Processing…' : method === 'cod' ? 'Place Order' : `I've Paid ${inr(total)} — Place Order`}
           </button>
+          {method === 'upi' && upiEnabled && !upiReady && (
+            <p className="mt-2 text-center text-xs text-gray-400">Enter the transaction id &amp; upload the screenshot to continue</p>
+          )}
         </div>
       </div>
     </div>
@@ -299,6 +386,23 @@ export default function Checkout() {
 const Row = ({ label, value, bold, className = '' }) => (
   <div className={`flex justify-between py-1.5 ${bold ? 'text-lg font-bold' : 'text-sm text-gray-500 dark:text-gray-300'} ${className}`}>
     <span>{label}</span><span>{value}</span>
+  </div>
+);
+
+const DetailRow = ({ label, value, onCopy }) => (
+  <div className="flex items-center justify-between gap-2 rounded-lg bg-black/5 px-3 py-2 dark:bg-white/5">
+    <span className="text-xs text-gray-400">{label}</span>
+    <span className="flex items-center gap-2 font-medium">
+      <span className="truncate">{value}</span>
+      {onCopy && <button onClick={onCopy} className="text-gold hover:opacity-70" title="Copy"><Copy size={13} /></button>}
+    </span>
+  </div>
+);
+
+const ReadonlyField = ({ label, value }) => (
+  <div>
+    <span className="mb-1 block text-xs text-gray-400">{label}</span>
+    <div className="rounded-xl border border-black/10 bg-black/5 px-3 py-2 text-sm dark:border-white/10 dark:bg-white/5">{value}</div>
   </div>
 );
 

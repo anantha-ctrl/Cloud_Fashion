@@ -37,7 +37,7 @@ and the security model.
 
 | Face | Who uses it | What it does |
 |------|-------------|--------------|
-| **Storefront** | Customers | Browse, search, wishlist, cart, checkout (Razorpay / COD), track orders, loyalty points |
+| **Storefront** | Customers | Browse, search, wishlist, cart, checkout (**UPI/QR** — admin-verified — or COD), track orders, loyalty points |
 | **Admin Panel** | Store owner / admin | Products, categories, inventory, orders, invoices, billing, customers, coupons, banners, reviews, returns, loyalty, reports, settings |
 | **Billing Counter (POS)** | Cashier / admin | In-store checkout — search/scan products, build a bill, take payment (cash / card / UPI / split), print invoice, auto-decrement stock |
 
@@ -136,7 +136,7 @@ CloudFashion/
 │       └── utils/                # format, invoice, csv helpers
 └── database/
     ├── cloudfashion.sql          # Base schema + seed
-    └── migration_002…023.sql     # Incremental schema updates
+    └── migration_002…024.sql     # Incremental schema updates
 ```
 
 ---
@@ -154,13 +154,13 @@ CloudFashion/
 3. **Create the database & import the schema:**
    - phpMyAdmin → Import → `database/cloudfashion.sql`, **or**
    - `mysql -u root -p < database/cloudfashion.sql`
-4. **Apply every migration in order (002 → 023):**
+4. **Apply every migration in order (002 → 024):**
    ```bash
    for f in database/migration_*.sql; do mysql -u root -p cloudfashion < "$f"; done
    ```
    These add reviews, returns, loyalty, the `settings` store, the contact inbox,
-   landing content, **billing/POS**, the **cashier** role, **split payment**, and
-   the **storefront scope**.
+   landing content, **billing/POS**, the **cashier** role, **split payment**, the
+   **storefront scope**, and **UPI/QR online payment** with admin verification.
 5. **Configure the backend:** copy `backend/.env.example` → `backend/.env` and set
    `DB_PASS` and a strong `JWT_SECRET`.
 6. **Run the frontend:**
@@ -256,7 +256,7 @@ Enforcement:
 | `wishlist` | Saved products |
 | `cart` | Server-side cart items |
 | `coupons` | Discount codes |
-| `orders` | Online orders — totals, payment, status, shipping address (JSON) |
+| `orders` | Online orders — totals, payment method (razorpay/cod/**upi**), status, shipping address (JSON), and (for UPI) proof/approval columns: `payment_txn_id`, `payment_screenshot`, `payment_approval`, `payment_note`, `payment_reviewed_at` |
 | `order_items` | Line items snapshot per order |
 | `reviews` | Product reviews (moderated) |
 | `recently_viewed` | Per-user browsing history |
@@ -298,7 +298,7 @@ Enforcement:
 
 ### 10.3 Shopping & Checkout
 - Address book, coupon application, shipping-fee / free-shipping threshold.
-- **Razorpay** online payment + **Cash on Delivery**.
+- **UPI / QR online payment** (admin-verified — see [10.10](#1010-online-payment-upiqr--verification)) + **Cash on Delivery**.
 - Order tracking, cancel, reorder, and **return requests**.
 - **Printable invoices** (open + print, "Save as PDF").
 
@@ -315,9 +315,11 @@ Enforcement:
   top products, recent customers, live activity feed & notifications.
 - **Products / Categories / Inventory** — full CRUD, bulk actions, CSV import,
   image upload, low-stock alerts, stock editing.
-- **Orders** — list + status updates (with customer email notifications).
+- **Orders** — list + status updates (with customer email notifications) + a
+  **Payment Approvals** queue for UPI payments (see [10.10](#1010-online-payment-upiqr--verification)).
 - **Invoices** — see [10.7](#107-unified-invoices).
-- **Customers, Coupons, Banners, Reviews, Returns, Loyalty, Messages, Reports,
+- **Customers** — list with spend + order history; **export to CSV / Excel / PDF**.
+- **Coupons, Banners, Reviews, Returns, Loyalty, Messages, Reports,
   Settings, Cashiers.**
 - **Reports** — sales / top products / top customers over a date range, merging
   online orders + counter bills; CSV export.
@@ -343,6 +345,7 @@ A single **Admin → Invoices** page lists **every sale in one place** — onlin
 - filter tabs (All / Online / Counter) + search,
 - a **View** modal and **Print** for each, source-aware (online → order invoice,
   counter → bill invoice with split breakdown),
+- a **delivery-verification QR** on every online invoice (see [10.11](#1011-invoice-verification-qr-delivery)),
 - auto-refresh for real-time updates.
 
 ### 10.8 Branding (fully dynamic)
@@ -360,6 +363,43 @@ A single **Admin → Invoices** page lists **every sale in one place** — onlin
 - Enforced once in the backend (`ProductController` + `CategoryController`); the nav
   is category-driven so it follows automatically. Set the value empty to restore the
   full multi-category catalogue.
+
+### 10.10 Online Payment (UPI/QR) & verification
+A gateway-free online payment flow, verified by an admin:
+- **Checkout** — choosing **Pay Online (UPI / QR)** shows, on the **left**, a
+  **scannable UPI QR** generated client-side from a `upi://pay?...` intent that
+  **encodes the exact payable amount** (or an admin-uploaded custom QR image), plus
+  the UPI ID and optional bank account/IFSC (copy buttons). On the **right**, the
+  customer's **name & phone are auto-filled** from the selected address, and they
+  enter the **transaction / reference id** and upload a **payment screenshot**. The
+  "Place Order" button unlocks only once both are provided.
+- **Placement** — `POST /api/orders/upi` persists the order with
+  `payment_method='upi'`, `payment_approval='pending'`, stores the txn id + screenshot
+  (Cloudinary when configured, else inline), clears the cart, and **emails the admin**
+  that a payment needs verification. **Stock is not moved yet.**
+- **Approval** — Admin → Orders → **Payment Approvals** shows the proof. **Approve**
+  (`PUT /api/admin/orders/{id}/payment`) sets it `paid`/`processing`, **commits stock
+  + loyalty**, and emails the customer a confirmation. **Reject** marks it `failed`
+  with a note and emails the customer (no stock was touched).
+- **Settings** — UPI ID, payee name, custom QR image, and bank account/IFSC are
+  edited in Admin → Settings. An **empty UPI ID disables** online payment (COD only),
+  exposed publicly via `GET /api/payment-info`.
+
+### 10.11 Invoice Verification QR (delivery)
+Every printed **online** invoice (Admin → Invoices, or the customer's Order detail)
+carries a QR that lets a courier confirm the parcel against the live order:
+- **What it encodes** — a signed link `…/verify-order/{id}?t=<token>`, where `token`
+  is an **HMAC** of the order id + number keyed by `JWT_SECRET`. It is tamper-proof
+  and un-guessable, so it prevents order enumeration without needing a DB column.
+- **On scan** — the public page `/verify-order/:id` calls
+  `GET /api/orders/verify/{id}?t=…` (no login) and, if the token matches, shows a
+  **"Order verified ✓"** card with the order number, status, payment, ship-to and the
+  **item list + quantities** — all read **live from the DB**. An invalid/tampered
+  token returns `403` and the page shows **"Not verified"**.
+- **Generation** — the token is attached to the order responses
+  (`GET /api/orders/{id}` and `GET /api/admin/invoices/order/{id}`) as `verify_token`;
+  the invoice printer builds the QR from it client-side (`qrcode`), so no image is
+  stored. Counter bills (no delivery) don't carry the QR.
 
 ---
 
@@ -396,13 +436,20 @@ GET/POST/PUT/DELETE  /api/addresses[/{id}]
 POST /api/coupons/apply
 POST /api/checkout/create-order      POST /api/checkout/verify
 GET  /api/orders    /api/orders/{id}    POST /api/orders/cod
+POST /api/orders/upi                 (UPI/QR — submit txn id + screenshot → awaiting verification)
 PUT  /api/orders/{id}/cancel   POST /api/orders/{id}/reorder   POST /api/orders/{id}/return
 GET  /api/loyalty
+```
+
+**Public order verification** (no auth — scanned from the invoice QR):
+```
+GET  /api/orders/verify/{id}?t=<token>   → live order + items + ship-to; 403 if token invalid
 ```
 
 ### Misc (public)
 ```
 GET  /api/store-info   /api/landing   /api/banners   /api/offers
+GET  /api/payment-info (UPI id / payee / QR / bank details for checkout)
 GET  /api/shipping-info    /api/recently-viewed   POST /api/recently-viewed
 POST /api/newsletter   /api/contact   /api/notify-stock
 ```
@@ -416,6 +463,7 @@ Products    GET/POST/PUT/DELETE /api/admin/products[/{id}]  + /bulk /import /{id
 Inventory   GET /api/admin/inventory  /low-stock   PUT /api/admin/inventory/{id}
 Categories  GET /api/admin/categories   POST/PUT/DELETE /api/admin/categories[/{id}]  (GET is full/unscoped; supports parent nesting)
 Orders      GET /api/admin/orders   PUT /api/admin/orders/{id}/status
+            GET /api/admin/orders/{id}/payment   PUT /api/admin/orders/{id}/payment  (UPI proof · approve/reject)
 Invoices    GET /api/admin/invoices   GET /api/admin/invoices/order/{id}
 Customers   GET /api/admin/customers[/{id}]
 Banners     GET/POST/PUT/DELETE /api/admin/banners[/{id}]
@@ -443,8 +491,8 @@ GET  /api/admin/billing/{id}             PUT  /api/admin/billing/{id}/void
 
 **Storefront:** `/` (landing) · `/home` · `/shop` · `/category/:slug` ·
 `/product/:slug` · `/cart` · `/wishlist` · `/compare` · `/checkout` ·
-`/orders` · `/orders/:id` · `/order-success/:id` · `/profile` ·
-`/about` · `/contact` · `/privacy` · `/terms`
+`/orders` · `/orders/:id` · `/order-success/:id` · `/verify-order/:id` (public invoice QR) ·
+`/profile` · `/about` · `/contact` · `/privacy` · `/terms`
 
 **Auth:** `/login` · `/register` · `/verify-otp` · `/forgot-password` · `/reset-password`
 
@@ -454,8 +502,8 @@ GET  /api/admin/billing/{id}             PUT  /api/admin/billing/{id}/void
 banners · orders · billing · invoices · returns · coupons · customers · reviews ·
 loyalty · messages · cashiers · reports · settings
 
-Admin, cashier, auth, and landing pages render their own chrome — the shared
-storefront navbar/footer are hidden there (the `bare` flag in `App.jsx`).
+Admin, cashier, auth, landing, and the public verify-order pages render their own
+chrome — the shared storefront navbar/footer are hidden there (the `bare` flag in `App.jsx`).
 
 ---
 
@@ -495,6 +543,7 @@ Apply after the base `cloudfashion.sql`, in order:
 | 021 | **Cashier role** — `users.role` gains `cashier` |
 | 022 | **Split payment** — billing `split` method (`split_cash` + `split_digital`) |
 | 023 | **Storefront scope** — `storefront_category` (e.g. men-only store) |
+| 024 | **UPI / QR payment** — `orders.payment_method` gains `upi` + proof/approval columns + UPI/bank payee settings |
 
 ---
 
@@ -516,12 +565,13 @@ See **`DEPLOYMENT.md`** for the full local (XAMPP) and production guide (shared
 host / VPS for the PHP API + Netlify/Vercel/static host for the React build,
 including Nginx rewrite rules, HTTPS, and CORS). In short:
 
-1. Upload `backend/` + `database/`, import `cloudfashion.sql`, apply migrations 002→023.
+1. Upload `backend/` + `database/`, import `cloudfashion.sql`, apply migrations 002→024.
 2. Set production `backend/.env` (real DB, strong `JWT_SECRET`, live SMTP/Cloudinary/Razorpay).
 3. Build the frontend (`npm run build`) with production `VITE_*` env and deploy `dist/`
    with an SPA redirect to `index.html`.
-4. After deploy, set brand/logo, store details, loyalty & billing settings, and create
-   cashier logins from the admin panel.
+4. After deploy, set brand/logo, store details, loyalty & billing settings, the
+   **UPI/QR payment details** (UPI ID, payee, QR, bank), and create cashier logins
+   from the admin panel.
 
 ---
 

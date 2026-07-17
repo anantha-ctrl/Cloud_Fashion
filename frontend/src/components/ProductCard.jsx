@@ -7,6 +7,7 @@ import { useWishlist } from '../context/WishlistContext';
 import { useCart } from '../context/CartContext';
 import { useCompare } from '../context/CompareContext';
 import QuickViewModal from './QuickViewModal';
+import Tilt3D from '../landing/lib/Tilt3D';
 
 export default function ProductCard({ product }) {
   const { has, toggle } = useWishlist();
@@ -17,11 +18,13 @@ export default function ProductCard({ product }) {
   const wished = has(product.id);
 
   return (
+    <>
+    <Tilt3D max={6} scale={1.02} className="h-full">
     <motion.div
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
-      className="group card overflow-hidden"
+      className="group card h-full overflow-hidden"
     >
       <div className="relative aspect-[3/4] overflow-hidden">
         <Link to={`/product/${product.slug}`}>
@@ -94,7 +97,9 @@ export default function ProductCard({ product }) {
         </div>
       </div>
 
-      {quickView && <QuickViewModal slug={product.slug} onClose={() => setQuickView(false)} />}
     </motion.div>
+    </Tilt3D>
+    {quickView && <QuickViewModal slug={product.slug} onClose={() => setQuickView(false)} />}
+    </>
   );
 }

@@ -3,10 +3,11 @@ import { motion, useScroll, useTransform } from 'framer-motion';
 import { ArrowRight } from 'lucide-react';
 import { MaskReveal } from '../lib/Reveal';
 import MagneticButton from '../lib/MagneticButton';
+import Tilt3D from '../lib/Tilt3D';
 
 /**
- * Full-screen editorial collection block. Reused for Men / Women / Kids by
- * flipping `reverse` and swapping content — one component, many stories.
+ * Full-screen editorial collection block (e.g. the Men story). Reusable —
+ * flip `reverse` and swap content for any collection.
  */
 export default function CollectionShowcase({
   index = '01', eyebrow, title, description, image, to, cta, reverse = false, accent = 'text-luxe-gold', dark = false,
@@ -57,15 +58,17 @@ export default function CollectionShowcase({
 
         {/* Image */}
         <div className={reverse ? 'lg:[direction:ltr]' : ''}>
-          <motion.div
-            initial={{ opacity: 0, y: 60 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-80px' }}
-            transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
-            className="relative overflow-hidden rounded-luxe-lg shadow-luxe"
-          >
-            <motion.img style={{ y, scale }} src={image} alt={eyebrow}
-              className="aspect-[4/5] w-full object-cover" />
-            <div className="absolute inset-0 ring-1 ring-inset ring-white/10" />
-          </motion.div>
+          <Tilt3D max={8} glare className="group">
+            <motion.div
+              initial={{ opacity: 0, y: 60 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: '-80px' }}
+              transition={{ duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
+              className="relative overflow-hidden rounded-luxe-lg shadow-luxe"
+            >
+              <motion.img style={{ y, scale }} src={image} alt={eyebrow}
+                className="aspect-[4/5] w-full object-cover" />
+              <div className="absolute inset-0 ring-1 ring-inset ring-white/10" />
+            </motion.div>
+          </Tilt3D>
         </div>
       </div>
     </section>

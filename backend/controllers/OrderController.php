@@ -50,6 +50,8 @@ class OrderController
             $order[$f] = (float) $order[$f];
         }
         $order['timeline'] = $this->timeline($order['status']);
+        // Signed token for the invoice's delivery-verification QR.
+        $order['verify_token'] = self::verifyToken((int) $order['id'], $order['order_number']);
 
         // Return/refund request for this order (if any).
         $ret = $db->prepare('SELECT status, reason, admin_note, created_at FROM returns WHERE order_id=?');
@@ -67,6 +69,152 @@ class OrderController
         $orderId = self::persistOrder($userId, $built, 'cod', 'pending');
         self::finalizeOrder($userId, $orderId, $built);
         Response::success(['order_id' => $orderId, 'order_number' => $built['order_number']], 'Order placed (COD)', 201);
+    }
+
+    /**
+     * Place an order paid manually by UPI / QR. The customer pays to the store's
+     * UPI id and submits the transaction id + a payment screenshot. The order is
+     * recorded as PENDING VERIFICATION — stock/points are only committed once an
+     * admin approves the payment (see AdminOrderController::reviewPayment).
+     */
+    public function placeUpi(array $p): void
+    {
+        $userId = Auth::id();
+        $body = Request::body();
+
+        $txnId = trim((string) ($body['txn_id'] ?? ''));
+        $shot = trim((string) ($body['screenshot'] ?? ''));
+        if ($txnId === '') {
+            Response::error('Please enter the UPI transaction / reference id', 422);
+        }
+        if ($shot === '') {
+            Response::error('Please upload a payment screenshot', 422);
+        }
+        if (Setting::get('upi_id', '') === '') {
+            Response::error('Online UPI payment is not configured. Please choose Cash on Delivery.', 400);
+        }
+
+        $built = self::buildOrderData($userId, $body);
+        $orderId = self::persistOrder($userId, $built, 'upi', 'pending');
+
+        // Upload the proof screenshot to Cloudinary when configured; otherwise
+        // keep the data URI inline (payment_screenshot is MEDIUMTEXT).
+        if (str_starts_with($shot, 'data:image')) {
+            $up = Cloudinary::upload($shot, 'cloudfashion/payments');
+            if ($up) {
+                $shot = $up['url'];
+            }
+        }
+
+        db()->prepare(
+            "UPDATE orders
+             SET payment_txn_id=?, payment_screenshot=?, payment_approval='pending'
+             WHERE id=? AND user_id=?"
+        )->execute([$txnId, $shot, $orderId, $userId]);
+
+        // The customer has committed to this order — empty their cart so they
+        // don't accidentally pay twice. Stock is decremented on approval.
+        db()->prepare('DELETE FROM cart WHERE user_id=?')->execute([$userId]);
+
+        self::notifyAdminUpiPending($userId, $built, $txnId);
+
+        Response::success(
+            ['order_id' => $orderId, 'order_number' => $built['order_number'], 'pending_approval' => true],
+            'Payment submitted. Your order is awaiting verification.',
+            201
+        );
+    }
+
+    /**
+     * Deterministic, tamper-proof token for an order's verification QR. It is an
+     * HMAC of the order id + number keyed by the server secret, so a scanned code
+     * can be validated without a DB column and cannot be forged or guessed.
+     */
+    public static function verifyToken(int $id, string $orderNumber): string
+    {
+        $secret = env('JWT_SECRET', 'novo-verify-secret');
+        return substr(hash_hmac('sha256', $id . '|' . $orderNumber, $secret), 0, 20);
+    }
+
+    /**
+     * GET /api/orders/verify/{id}?t=<token> — PUBLIC delivery-verification lookup.
+     * Scanned from the invoice QR at delivery time; returns the live order details
+     * (items, quantities, ship-to, status) so the courier can confirm the parcel.
+     * Token-gated to prevent order enumeration; no auth so any scanner app works.
+     */
+    public function verifyPublic(array $p): void
+    {
+        $id = (int) $p['id'];
+        $token = (string) Request::query('t', '');
+        $db = db();
+        $stmt = $db->prepare(
+            'SELECT o.id, o.order_number, o.status, o.payment_method, o.payment_status, o.payment_approval,
+                    o.total, o.placed_at, o.shipping_address, u.name AS customer_name, u.phone AS customer_phone
+             FROM orders o JOIN users u ON u.id=o.user_id WHERE o.id=?'
+        );
+        $stmt->execute([$id]);
+        $order = $stmt->fetch();
+        if (!$order || !hash_equals(self::verifyToken($id, $order['order_number']), $token)) {
+            Response::error('Invalid or expired verification code', 403);
+        }
+
+        $it = $db->prepare('SELECT product_name, size, color, quantity FROM order_items WHERE order_id=?');
+        $it->execute([$id]);
+        $rows = $it->fetchAll();
+        $addr = json_decode($order['shipping_address'] ?? 'null', true) ?: [];
+
+        Response::success([
+            'verified'        => true,
+            'order_number'    => $order['order_number'],
+            'status'          => $order['status'],
+            'payment_method'  => $order['payment_method'],
+            'payment_status'  => $order['payment_status'],
+            'payment_approval' => $order['payment_approval'],
+            'placed_at'       => $order['placed_at'],
+            'total'           => (float) $order['total'],
+            'item_count'      => array_sum(array_map(fn ($r) => (int) $r['quantity'], $rows)),
+            'ship_to'         => [
+                'name'    => $addr['full_name'] ?? $order['customer_name'],
+                'phone'   => $addr['phone'] ?? $order['customer_phone'],
+                'city'    => $addr['city'] ?? '',
+                'state'   => $addr['state'] ?? '',
+                'pincode' => $addr['pincode'] ?? '',
+            ],
+            'items'           => array_map(fn ($r) => [
+                'name' => $r['product_name'],
+                'qty'  => (int) $r['quantity'],
+                'size' => $r['size'],
+                'color' => $r['color'],
+            ], $rows),
+        ]);
+    }
+
+    /** Email the store admin that a UPI payment needs verification. Best effort. */
+    private static function notifyAdminUpiPending(int $userId, array $built, string $txnId): void
+    {
+        $db = db();
+        $u = $db->prepare('SELECT name, email, phone FROM users WHERE id=?');
+        $u->execute([$userId]);
+        $cust = $u->fetch() ?: ['name' => 'Customer', 'email' => '', 'phone' => ''];
+
+        $adminTo = Setting::get('store_contact_to', '')
+            ?: Setting::get('store_contact_email', '')
+            ?: (string) ($db->query("SELECT email FROM users WHERE role='admin' ORDER BY id LIMIT 1")->fetchColumn() ?: '');
+        if ($adminTo === '') {
+            return;
+        }
+
+        Mailer::send(
+            $adminTo,
+            Mailer::brand() . ' · UPI payment to verify — Order ' . $built['order_number'],
+            Mailer::upiPendingAdminTemplate(
+                $built['order_number'],
+                $cust['name'],
+                $cust['phone'] ?? '',
+                (float) $built['total'],
+                $txnId
+            )
+        );
     }
 
     public function cancel(array $p): void
@@ -316,6 +464,55 @@ class OrderController
                 $user['email'],
                 Mailer::brand() . ' · Order ' . $d['order_number'] . ' confirmed',
                 Mailer::orderPlacedTemplate($user['name'], $d['order_number'], (float) $d['total'])
+            );
+        }
+    }
+
+    /**
+     * Commit an already-persisted order (stock, coupon usage, loyalty, email)
+     * from its saved DB rows. Used when a manual UPI payment is approved by an
+     * admin — the order existed as "pending verification" and is now confirmed.
+     */
+    public static function finalizeFromDb(int $orderId): void
+    {
+        $db = db();
+        $o = $db->prepare('SELECT * FROM orders WHERE id=?');
+        $o->execute([$orderId]);
+        $order = $o->fetch();
+        if (!$order) {
+            return;
+        }
+        $uid = (int) $order['user_id'];
+
+        $items = $db->prepare('SELECT product_id, variant_id, quantity FROM order_items WHERE order_id=?');
+        $items->execute([$orderId]);
+        foreach ($items->fetchAll() as $it) {
+            if ($it['variant_id']) {
+                $db->prepare('UPDATE product_variants SET stock=GREATEST(stock-?,0) WHERE id=?')
+                   ->execute([$it['quantity'], $it['variant_id']]);
+            }
+            if ($it['product_id']) {
+                $db->prepare('UPDATE products SET stock=GREATEST(stock-?,0), sold_count=sold_count+? WHERE id=?')
+                   ->execute([$it['quantity'], $it['quantity'], $it['product_id']]);
+            }
+        }
+        if ($order['coupon_code']) {
+            $db->prepare('UPDATE coupons SET used_count=used_count+1 WHERE code=?')->execute([$order['coupon_code']]);
+        }
+        if ((int) $order['points_used'] > 0) {
+            LoyaltyController::award($db, $uid, -(int) $order['points_used'], 'redeem', $orderId, 'Redeemed at checkout');
+        }
+        if ((int) $order['points_earned'] > 0) {
+            LoyaltyController::award($db, $uid, (int) $order['points_earned'], 'earn', $orderId, 'Earned on order ' . $order['order_number']);
+        }
+
+        $u = $db->prepare('SELECT name, email FROM users WHERE id=?');
+        $u->execute([$uid]);
+        if ($user = $u->fetch()) {
+            Mailer::send(
+                $user['email'],
+                Mailer::brand() . ' · Order ' . $order['order_number'] . ' confirmed',
+                Mailer::orderPlacedTemplate($user['name'], $order['order_number'], (float) $order['total'])
             );
         }
     }

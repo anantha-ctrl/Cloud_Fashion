@@ -2,7 +2,7 @@
 
 A complete, production-ready **single-vendor fashion e-commerce** web application with a premium, luxury UI — featuring a glassmorphism design, dark/light mode, full customer storefront, and a powerful admin dashboard.
 
-**Stack:** React (Vite) + Tailwind CSS · PHP 8 (dependency-free) · MySQL/MariaDB · JWT + Email OTP + **Google Sign-In** · Cloudinary · Razorpay
+**Stack:** React (Vite) + Tailwind CSS · PHP 8 (dependency-free) · MySQL/MariaDB · JWT + Email OTP + **Google Sign-In** · Cloudinary · **UPI/QR (admin-verified)** + Razorpay-ready
 
 ---
 
@@ -50,11 +50,12 @@ flowchart TB
 - **Product comparison** — Add items to a **compare bar** and view side-by-side specs
 - **Wishlist**, **Cart** (variant-aware, live totals)
 - **Loyalty Points** — Earn points on every order (configurable rate + **per-order cap**), **redeem at checkout** (configurable ₹ value per point); Rewards tab with balance + history
-- **Checkout** — Address management, **live available-coupons chips** (tap to apply), **loyalty points redemption**, **Razorpay** online payment + **COD**
+- **Checkout** — Address management, **live available-coupons chips** (tap to apply), **loyalty points redemption**, **UPI / QR online payment** + **COD**
+  - **UPI / QR payment (no gateway needed)** — "Pay Online" shows a **scannable UPI QR** (auto-generated with the exact amount) + UPI ID / bank details on the left, and on the right the customer's auto-filled name/phone, a **transaction-ID** field and a **payment-screenshot** upload; the order is placed as **"awaiting verification"** and confirmed once an **admin approves** the payment (stock committed + confirmation email). Admin gets an email the moment a payment is submitted.
   - **Smart shipping** — first order ships **free**; repeat orders free above the (admin-set) threshold, else a flat fee
   - **First-order-only coupons** (e.g. `WELCOME10`) validated against order history
   - Atomic order creation (DB transaction — no orphan orders on failure)
-- **Orders** — History, detail with status timeline, **shipment tracking** (carrier + tracking #), **Reorder**, cancel & auto-restock, **post-delivery reviews**, **Returns/Refund requests (RMA)**
+- **Orders** — History, detail with status timeline, **shipment tracking** (carrier + tracking #), **Reorder**, cancel & auto-restock, **post-delivery reviews**, **Returns/Refund requests (RMA)**, **print invoice** (with a delivery-verification QR)
 - **Order emails** — Order-placed confirmation + status-update + **return-status** emails
 - **Profile** — Edit details, change password, manage addresses, **Rewards** (mobile-friendly tabbed layout)
 - Recently viewed, newsletter, **working contact form** (saved to DB + emailed), About/Privacy/Terms pages
@@ -65,21 +66,21 @@ flowchart TB
 - **Dashboard** — KPI cards (today's sales, pending orders, avg order value, new customers…), a **sales-by-channel** row (online vs in-store counter), revenue chart, color-coded order-status chart, top products & recent customers widgets, manual **Refresh**
   - **Combined revenue** — online orders **+** in-store billing counter sales; cancelled orders excluded (only `paid` & non-cancelled count)
 - **Billing / POS** — in-store checkout counter: live product search + **QR/barcode scan**, cart with per-order discount (₹ or %) and configurable **tax/GST**, **cash / UPI / card / split** payment (split = part cash + part card/UPI, validated to cover the total) with change calc, optional customer (earns loyalty), **printable thermal invoice** (80mm, monospace, store **logo** header), bill **history + void & restock**; every sale decrements the same live stock as online orders
-- **Invoices** — one unified list of **every sale** — online orders **+** counter bills — newest first, with channel filter (All / Online / Counter), KPIs, and **view + print** for each (thermal receipt for counter, A4 invoice for online), auto-refreshing
+- **Invoices** — one unified list of **every sale** — online orders **+** counter bills — newest first, with channel filter (All / Online / Counter), KPIs, and **view + print** for each (thermal receipt for counter, A4 invoice for online), auto-refreshing; every printed online invoice carries a **delivery-verification QR** — scanning it opens a **public verify page** that confirms the order & its items **live from the DB** (signed token, tamper-proof)
 - **Cashiers** — create billing-counter staff logins (`cashier` role) that can access **only** the billing screen; block/unblock, reset password, per-cashier sales totals
 - **Notifications** — Bell with live alerts, **mark read/unread**, **delete**, **mark-all-read**
 - **Products** — Full CRUD, multiple images (Cloudinary or inline base64), variants, specifications, **bulk CSV import** (auto-creates categories)
 - **Categories** (clean auto-slugs), **Coupons** (percentage/fixed, min order, expiry, usage limit, **first-order-only**, **edit** support)
 - **Banners** — CRUD for homepage hero/promo banners
-- **Orders** — Filter by status, update lifecycle (pending → processing → packed → shipped → delivered / cancelled), set **carrier + tracking number**, **"Save & notify"** emails the customer
+- **Orders** — Filter by status, update lifecycle (pending → processing → packed → shipped → delivered / cancelled), set **carrier + tracking number**, **"Save & notify"** emails the customer; a **Payment Approvals** queue (badge count) surfaces UPI orders awaiting verification — open the proof (transaction id + screenshot) and **approve** (confirms the order, commits stock, emails the customer) or **reject** (emails the reason)
 - **Categories** — CRUD with **image upload** (Cloudinary or inline), shown live on the storefront
 - **Inventory** — Low-stock & out-of-stock alerts, stock editing
-- **Customers** — List with spend, order history drill-down
+- **Customers** — List with spend, order history drill-down, **export** the list to **CSV / Excel / PDF**
 - **Reviews** — Moderate customer reviews (hide/unhide, delete) with live rating recalculation
 - **Returns** — Approve/reject RMA requests → auto-restock + refund status + customer email
 - **Loyalty** — Per-customer point balances, KPIs (issued/redeemed/outstanding), transaction history, **manual credit/deduct**, and editable **program rules** (earn rate, per-order cap, ₹ per point, redeem cap)
 - **Messages** — Inbox for Contact Us submissions with unread badge, mark read/unread, one-click email reply
-- **Store Settings** — Edit store name, public contact details, message inbox, **announcement bar**, **free-shipping threshold + flat fee**, **social links & WhatsApp** — all live on the storefront in real time
+- **Store Settings** — Edit store name, public contact details, message inbox, **announcement bar**, **free-shipping threshold + flat fee**, **social links & WhatsApp**, and the **online-payment details** (UPI ID, payee, optional custom QR image, bank account/IFSC) — all live on the storefront in real time
 - **Reports** — Date-range filter + presets, KPI cards (incl. **online vs counter revenue**), charts (daily revenue, orders by status, revenue by category, payment methods) — **all combine online + in-store billing** — CSV export, **Refresh** (revenue excludes cancelled)
 - **Product QR labels** — generate & print scannable QR stickers (encode the product URL) for the counter scanner: a single product, **N copies** of one product, or **all products on one sheet** (bulk)
 - **Storefront scope** — a `storefront_category` setting limits the whole storefront (listings, collections, filters, product pages, nav & footer categories) to one category + its children — currently **men-only**; other products stay in the DB, manageable in admin and sellable at the counter
@@ -94,7 +95,7 @@ flowchart TB
 CloudFashion/
 ├── database/
 │   ├── cloudfashion.sql          # Full schema + seed data
-│   └── migration_002…023.sql     # Incremental schema updates (see Migrations)
+│   └── migration_002…024.sql     # Incremental schema updates (see Migrations)
 ├── backend/                      # PHP API (front-controller, no Composer needed)
 │   ├── bootstrap.php             # Loads env, core, autoloader
 │   ├── index.php                 # Router + CORS
@@ -108,7 +109,7 @@ CloudFashion/
     │   ├── api/client.js          # Axios instance (JWT interceptor)
     │   ├── context/               # Auth, Cart, Wishlist, Theme, Compare, Store
     │   ├── components/            # Navbar (DB-driven categories), Footer, ProductCard, CompareBar, …
-    │   ├── pages/                 # Home, Shop, ProductDetails, Cart, Checkout, Orders, Compare, auth/, static/
+    │   ├── pages/                 # Home, Shop, ProductDetails, Cart, Checkout, Orders, Compare, VerifyOrder, auth/, static/
     │   └── admin/                 # AdminLayout, Dashboard, AdminProducts, AdminBilling, AdminInvoices, AdminReviews, AdminReturns, AdminLoyalty, AdminSettings, …
     └── tailwind.config.js
 ```
@@ -182,7 +183,9 @@ erDiagram
         string status
         string carrier
         string tracking_number
+        string payment_method "razorpay | cod | upi"
         string payment_status
+        string payment_approval "none | pending | approved | rejected"
     }
     order_items {
         bigint id PK
@@ -225,6 +228,7 @@ erDiagram
 | `migration_021.sql` | **Cashier role** — `users.role` gains `cashier` (billing-counter staff) |
 | `migration_022.sql` | **Split payment** — replaces billing `other` method with `split` (`split_cash` + `split_digital`) |
 | `migration_023.sql` | **Storefront scope** — `storefront_category` setting limits the storefront to one category + children (e.g. men-only) |
+| `migration_024.sql` | **UPI / QR payment** — adds `upi` to `orders.payment_method` + proof/approval columns (`payment_txn_id`, `payment_screenshot`, `payment_approval`, `payment_note`, `payment_reviewed_at`) and UPI/bank payee settings |
 
 ```bash
 # apply every migration in order (phpMyAdmin or CLI)
@@ -332,11 +336,13 @@ GET    /api/categories               POST   /api/cart
 GET    /api/offers                   POST   /api/coupons/apply
 GET    /api/shipping-info            POST   /api/notify-stock
 GET    /api/store-info               POST   /api/contact
+GET    /api/payment-info             (UPI id / payee / QR / bank details)
 GET    /api/loyalty                  POST   /api/reviews
 POST   /api/checkout/create-order    POST   /api/checkout/verify
-POST   /api/orders/cod               POST   /api/orders/{id}/reorder
-GET    /api/orders                   PUT    /api/orders/{id}/cancel
-POST   /api/orders/{id}/return
+POST   /api/orders/cod               POST   /api/orders/upi   (submit txn id + screenshot)
+POST   /api/orders/{id}/reorder      PUT    /api/orders/{id}/cancel
+GET    /api/orders                   POST   /api/orders/{id}/return
+GET    /api/orders/verify/{id}?t=    (public — invoice QR delivery verification)
 
 GET    /api/categories/{slug}/thumb  GET    /api/products/{id}/thumb   (cached image passthrough)
 
@@ -345,6 +351,7 @@ GET    /api/admin/dashboard          GET    /api/admin/notifications
 POST   /api/admin/products           POST   /api/admin/products/import   (bulk CSV)
 GET    /api/admin/categories         (full, unscoped list for admin)
 PUT    /api/admin/orders/{id}/status (carrier + tracking, emails customer)
+GET    /api/admin/orders/{id}/payment PUT   /api/admin/orders/{id}/payment (UPI proof · approve/reject)
 GET    /api/admin/invoices           GET    /api/admin/invoices/order/{id}  (unified sales)
 GET    /api/admin/reports/sales?from=&to=   (online + counter combined)
 CRUD   /api/admin/banners            CRUD   /api/admin/coupons
@@ -370,7 +377,10 @@ GET    /api/admin/billing/{id}       PUT    /api/admin/billing/{id}/void
 
 ```mermaid
 stateDiagram-v2
-    [*] --> pending: Order placed (COD / Razorpay paid)
+    [*] --> awaiting_verification: UPI paid — proof submitted
+    awaiting_verification --> pending: Admin approves payment → 📧 customer
+    awaiting_verification --> [*]: Admin rejects payment → 📧 customer
+    [*] --> pending: Order placed (COD)
     pending --> processing: Admin confirms
     processing --> packed: Items packed
     packed --> shipped: Carrier + tracking # set → 📧 customer
@@ -416,27 +426,29 @@ sequenceDiagram
     actor U as User
     participant FE as React App
     participant API as PHP API
-    participant RZP as Razorpay
+    participant Admin as Store Admin
     participant SMTP as Gmail SMTP
 
     U->>FE: Open checkout
-    FE->>API: GET /api/offers, /api/shipping-info
-    API-->>FE: coupons + shipping (free first order)
+    FE->>API: GET /api/offers, /api/shipping-info, /api/payment-info
+    API-->>FE: coupons + shipping + UPI/QR details
     U->>FE: Pick address, apply coupon, choose payment
 
     alt Cash on Delivery
         FE->>API: POST /api/orders/cod
-        API->>API: persist order (transaction)
-    else Razorpay
-        FE->>API: POST /api/checkout/create-order
-        API->>RZP: create order
-        U->>RZP: pay
-        RZP-->>FE: payment id + signature
-        FE->>API: POST /api/checkout/verify
-        API->>API: verify signature → persist order
+        API->>API: persist order (transaction) + decrement stock
+        API->>SMTP: order-placed email 📧
+    else UPI / QR (admin-verified)
+        U->>U: Scan QR / pay to UPI ID
+        U->>FE: Enter txn id + upload screenshot
+        FE->>API: POST /api/orders/upi
+        API->>API: persist order · payment_approval = pending
+        API->>SMTP: "payment to verify" email → admin 📧
+        Admin->>API: PUT /api/admin/orders/{id}/payment (approve)
+        API->>API: commit stock + loyalty → status processing
+        API->>SMTP: order-confirmed email → customer 📧
     end
 
-    API->>SMTP: order-placed email 📧
     API-->>FE: order_id → Order Success
 ```
 
@@ -454,7 +466,15 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** for production deployment.
 
 ## 🆕 What's New (post-launch updates)
 
-### Latest wave — men-only store, split payment, unified invoices & thermal receipts
+### Latest wave — UPI/QR online payment, admin verification, invoice QR & customer export
+- **Invoice delivery-verification QR** — every printed online invoice now carries a QR that encodes a **signed link**; scanning it opens a **public verify page** (`/verify-order/:id`) showing the order, items, ship-to and status **live from the DB** so a courier can confirm the parcel. Token is an HMAC of the order id + number — tamper-proof, no enumeration. Backed by public `GET /api/orders/verify/{id}`.
+- **UPI / QR online payment (no gateway required)** — "Pay Online" now shows a **scannable UPI QR** encoding the exact amount, plus UPI ID and bank details. The customer enters the **transaction id** and uploads a **payment screenshot**; the order is placed as **"awaiting verification"** (migration 024). Backed by `GET /api/payment-info` + `POST /api/orders/upi`.
+- **Admin payment approval** — a **Payment Approvals** queue in Admin → Orders (with a live badge) shows the proof (txn id + screenshot); **Approve** confirms the order (commits stock + loyalty, emails the customer), **Reject** emails the reason. The store admin is emailed the moment a payment is submitted. (`GET`/`PUT /api/admin/orders/{id}/payment`.)
+- **Configurable payee** — UPI ID, payee name, an optional **custom QR image**, and bank account/IFSC live in Admin → Settings (empty UPI ID disables online payment, leaving COD).
+- **Customers export** — download the customer list as **CSV / Excel / PDF** from Admin → Customers.
+- **Men-only landing + subtle 3D** — the landing page drops the Women/Kids blocks (men-only store) and adds tasteful **3D tilt** on category cards, the collection showcase and product cards.
+
+### Earlier wave — men-only store, split payment, unified invoices & thermal receipts
 - **Split payment** at the counter — settle a bill part **cash** + part **card/UPI**; the server validates the two portions cover the total and stores the breakdown, which prints on the receipt. (Replaces the old "other" method — migration 022.)
 - **Unified Invoices page** (Admin → Invoices) — **every sale in one place**: online orders **+** counter bills, newest first, with channel filter, KPIs, and view/print per row (thermal for counter, A4 for online).
 - **Men-only storefront scope** — a `storefront_category` setting (migration 023) limits the entire storefront to one category + children; nav and footer categories are DB-driven and follow automatically. Non-men products stay in the DB, manageable in admin and sellable at the counter.
