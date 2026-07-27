@@ -47,10 +47,11 @@ class AdminBillingController
                 WHERE p.is_active=1";
         $args = [];
         if ($q !== '') {
-            $sql .= " AND (p.name LIKE ? OR p.id=? OR EXISTS
+            $sql .= " AND (p.name LIKE ? OR p.id=? OR p.barcode=? OR EXISTS
                         (SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.sku LIKE ?))";
             $args[] = "%$q%";
             $args[] = ctype_digit($q) ? (int) $q : 0;
+            $args[] = $q;
             $args[] = "%$q%";
         }
         $sql .= ' ORDER BY p.sold_count DESC, p.name ASC LIMIT 24';
@@ -90,11 +91,11 @@ class AdminBillingController
                        FROM product_images WHERE product_id=p.id ORDER BY is_primary DESC LIMIT 1) AS image
              FROM products p
              WHERE p.is_active=1
-               AND (p.id=? OR p.slug=? OR EXISTS
+               AND (p.id=? OR p.slug=? OR p.barcode=? OR EXISTS
                     (SELECT 1 FROM product_variants v WHERE v.product_id=p.id AND v.sku=?))
              LIMIT 1"
         );
-        $stmt->execute([ctype_digit($code) ? (int) $code : 0, $code, $code]);
+        $stmt->execute([ctype_digit($code) ? (int) $code : 0, $code, $code, $code]);
         $prod = $stmt->fetch();
         if (!$prod) {
             Response::error('No product matches "' . $code . '"', 404);

@@ -10,7 +10,7 @@ export default defineConfig({
     // taken by another app), the saved token would be orphaned and every admin
     // call would 401. strictPort makes startup fail loudly instead of silently
     // moving ports, so the origin — and your session — stays stable.
-    port: 5190,
+    port: 5181,
     strictPort: true,
     open: true,
   },

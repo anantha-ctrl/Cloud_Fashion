@@ -4,7 +4,8 @@ import {
   Calculator, Split, CreditCard, Smartphone, Wallet, User, ScrollText,
   ScanLine, Camera, CameraOff,
 } from 'lucide-react';
-import jsQR from 'jsqr';
+import { BrowserMultiFormatReader } from '@zxing/browser';
+import { DecodeHintType, BarcodeFormat } from '@zxing/library';
 import toast from 'react-hot-toast';
 import api from '../api/client';
 import { Spinner, Empty } from '../components/ui';
@@ -39,6 +40,7 @@ export default function AdminBilling() {
 
   // --- POS state ---
   const [q, setQ] = useState('');
+  const searchRef = useRef(null); // keep focus for continuous hardware scanning
   const [results, setResults] = useState([]);
   const [searching, setSearching] = useState(false);
   const [cart, setCart] = useState([]);
@@ -117,18 +119,38 @@ export default function AdminBilling() {
     return true;
   };
 
-  // Resolve a scanned QR/barcode to a live product and drop it into the bill.
-  const handleCode = async (code) => {
+  // Resolve a scanned code (URL / id / slug / SKU / barcode) to a live product.
+  // Returns the product, or null on no-match (silent — the caller decides feedback).
+  const resolveCode = async (code) => {
     try {
       const { data } = await api.get('/api/admin/billing/lookup', { params: { code } });
-      if (addItem(data.data)) toast.success(`Added ${data.data.name}`);
-    } catch (e) { toast.error(e.message); }
+      return data.data;
+    } catch { return null; }
   };
 
-  // Hardware barcode scanners "type" the code + Enter into the search box.
-  const onSearchEnter = (e) => {
+  // Camera scanner path — resolve and add, with on-screen feedback.
+  const handleCode = async (code) => {
+    const prod = await resolveCode(code);
+    if (prod) { if (addItem(prod)) toast.success(`Added ${prod.name}`); }
+    else toast.error(`No product matches "${code}"`);
+  };
+
+  // Hardware barcode scanners "type" the decoded value + Enter into the search box.
+  // Read the value straight off the input element (e.target.value) — the `q` state
+  // can lag the last keystrokes when the scanner types + Enter faster than React
+  // re-renders. The value may be a 13-digit EAN-13, an id, a custom SKU or an old
+  // QR URL, so try an exact lookup FIRST (matches id/slug/sku/barcode); only if
+  // nothing matches do we fall back to the top typed-search result.
+  const onSearchEnter = async (e) => {
     if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const code = (e.target.value ?? q).trim();
+    if (!code) return;
+    const refocus = () => searchRef.current?.focus();
+    const prod = await resolveCode(code);
+    if (prod) { if (addItem(prod)) setQ(''); refocus(); return; }
     if (results[0] && addItem(results[0])) setQ('');
+    refocus();
   };
 
   const setQty = (id, delta) =>
@@ -234,8 +256,8 @@ export default function AdminBilling() {
             <div className="flex items-center gap-2">
               <div className="relative flex-1">
                 <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchEnter}
-                  placeholder="Search or scan — name, SKU, ID…"
+                <input ref={searchRef} autoFocus value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchEnter}
+                  placeholder="Search or scan — name, SKU, barcode…"
                   className="input !pl-10" />
               </div>
               <button onClick={() => setScanning(true)}
@@ -398,10 +420,13 @@ export default function AdminBilling() {
   );
 }
 
-/** Live camera QR scanner — decodes with jsQR and reports each code (with a cooldown). */
+/**
+ * Live camera scanner — decodes both 1D **barcodes** (EAN-13 / Code128 / UPC…)
+ * and QR codes via ZXing, reporting each code (with a cooldown). Prefers the
+ * rear ("environment") camera.
+ */
 function Scanner({ onClose, onCode }) {
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);
   const [err, setErr] = useState('');
   const [last, setLast] = useState('');
   const seen = useRef({ code: '', t: 0 });
@@ -409,45 +434,86 @@ function Scanner({ onClose, onCode }) {
   onCodeRef.current = onCode; // always call the latest handler without restarting the camera
 
   useEffect(() => {
-    let stream = null, raf = 0, cancelled = false;
+    let stream = null, controls = null, raf = 0, cancelled = false;
 
-    const tick = () => {
-      if (cancelled) return;
-      const v = videoRef.current, c = canvasRef.current;
-      if (v && c && v.readyState === v.HAVE_ENOUGH_DATA) {
-        c.width = v.videoWidth; c.height = v.videoHeight;
-        const ctx = c.getContext('2d', { willReadFrequently: true });
-        ctx.drawImage(v, 0, 0, c.width, c.height);
-        const { data, width, height } = ctx.getImageData(0, 0, c.width, c.height);
-        const res = jsQR(data, width, height, { inversionAttempts: 'dontInvert' });
-        if (res?.data) {
-          const now = Date.now();
-          if (res.data !== seen.current.code || now - seen.current.t > 1500) {
-            seen.current = { code: res.data, t: now };
-            setLast(res.data);
-            onCodeRef.current(res.data);
-          }
-        }
+    // ZXing logs a NotFoundException for every camera frame with no code (plus a
+    // couple of harmless play() warnings). Filter ONLY that scan noise while the
+    // scanner is open, and restore the console untouched on close.
+    const NOISE = /NotFoundException|non-ReaderException|already playing|play\(\) request was interrupted|interrupted by a new load/i;
+    const orig = { log: console.log, warn: console.warn, error: console.error };
+    const isNoise = (a) => a.length && ((typeof a[0] === 'string' && NOISE.test(a[0])) || NOISE.test(String(a[0]?.message ?? '')));
+    const wrap = (fn) => (...a) => { if (!isNoise(a)) fn(...a); };
+    console.log = wrap(orig.log); console.warn = wrap(orig.warn); console.error = wrap(orig.error);
+    const restoreConsole = () => { console.log = orig.log; console.warn = orig.warn; console.error = orig.error; };
+
+    // Fire the handler once per code, de-duped with a short cooldown.
+    const emit = (text) => {
+      const now = Date.now();
+      if (text && (text !== seen.current.code || now - seen.current.t > 1500)) {
+        seen.current = { code: text, t: now };
+        setLast(text);
+        onCodeRef.current(text);
       }
-      raf = requestAnimationFrame(tick);
     };
 
     (async () => {
       try {
+        // Own the camera stream so the readers just consume frames — gives us the
+        // rear camera and a single, stable video element.
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
         if (cancelled) { stream.getTracks().forEach((t) => t.stop()); return; }
         const v = videoRef.current;
         v.srcObject = stream;
-        await v.play();
-        raf = requestAnimationFrame(tick);
+
+        // Prefer the browser's native BarcodeDetector — fast and log-free.
+        let detector = null;
+        if ('BarcodeDetector' in window) {
+          try {
+            const supported = await window.BarcodeDetector.getSupportedFormats();
+            const want = ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code']
+              .filter((f) => supported.includes(f));
+            if (want.length) detector = new window.BarcodeDetector({ formats: want });
+          } catch { detector = null; }
+        }
+
+        if (detector) {
+          await v.play().catch(() => {});
+          const loop = async () => {
+            if (cancelled) return;
+            try {
+              const codes = await detector.detect(v);
+              if (codes[0]?.rawValue) emit(codes[0].rawValue);
+            } catch { /* transient detect error — keep scanning */ }
+            raf = requestAnimationFrame(loop);
+          };
+          raf = requestAnimationFrame(loop);
+        } else {
+          // Fallback: ZXing reads barcodes + QR. Let it drive the video element's
+          // playback (don't pre-play) so it doesn't race our own play() call.
+          const hints = new Map();
+          hints.set(DecodeHintType.POSSIBLE_FORMATS, [
+            BarcodeFormat.EAN_13, BarcodeFormat.EAN_8, BarcodeFormat.UPC_A, BarcodeFormat.UPC_E,
+            BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.ITF, BarcodeFormat.QR_CODE,
+          ]);
+          const reader = new BrowserMultiFormatReader(hints, { delayBetweenScanAttempts: 200 });
+          controls = await reader.decodeFromVideoElement(v, (result) => { if (result) emit(result.getText()); });
+          if (cancelled) controls.stop();
+        }
       } catch (e) {
+        restoreConsole();
         setErr(e?.name === 'NotAllowedError'
           ? 'Camera permission denied. Allow camera access to scan.'
           : 'No camera found on this device.');
       }
     })();
 
-    return () => { cancelled = true; cancelAnimationFrame(raf); if (stream) stream.getTracks().forEach((t) => t.stop()); };
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      try { controls?.stop(); } catch { /* already stopped */ }
+      if (stream) stream.getTracks().forEach((t) => t.stop());
+      restoreConsole();
+    };
   }, []);
 
   return (
@@ -455,7 +521,7 @@ function Scanner({ onClose, onCode }) {
       <div className="absolute inset-0 bg-black/70" onClick={onClose} />
       <div className="card relative z-10 w-full max-w-md overflow-hidden p-0">
         <div className="flex items-center justify-between border-b border-black/5 p-4 dark:border-white/10">
-          <h3 className="flex items-center gap-2 font-semibold"><ScanLine size={17} className="text-gold" /> Scan product QR</h3>
+          <h3 className="flex items-center gap-2 font-semibold"><ScanLine size={17} className="text-gold" /> Scan barcode / QR</h3>
           <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-black/5 dark:hover:bg-white/10"><X size={18} /></button>
         </div>
 
@@ -467,19 +533,18 @@ function Scanner({ onClose, onCode }) {
           ) : (
             <>
               <video ref={videoRef} muted playsInline className="h-full w-full object-cover" />
-              {/* scanning reticle */}
+              {/* scanning reticle — wide for 1D barcodes */}
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="h-56 w-56 rounded-2xl border-2 border-gold/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" />
+                <div className="h-40 w-64 rounded-2xl border-2 border-gold/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.45)]" />
               </div>
             </>
           )}
-          <canvas ref={canvasRef} className="hidden" />
         </div>
 
         <div className="flex items-center gap-2 p-4 text-sm text-gray-500">
           <Camera size={15} className="shrink-0 text-gold" />
           {last ? <span>Last scan: <b className="text-gold">{last}</b> — keep scanning to add more.</span>
-            : <span>Point the camera at a product QR code.</span>}
+            : <span>Point the camera at the product barcode or QR code.</span>}
         </div>
       </div>
     </div>

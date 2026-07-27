@@ -1,12 +1,34 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, Download, Upload, FileSpreadsheet, Eye, EyeOff, QrCode, X, Printer } from 'lucide-react';
-import QRCode from 'qrcode';
+import { Plus, Pencil, Trash2, Search, Download, Upload, FileSpreadsheet, Eye, EyeOff, Barcode, X, Printer } from 'lucide-react';
+import JsBarcode from 'jsbarcode';
 import toast from 'react-hot-toast';
 import api from '../api/client';
 import { inr } from '../utils/format';
 import { exportCsv, parseCsv } from '../utils/csv';
 import { Spinner, Checkbox } from '../components/ui';
+
+/** True for a syntactically valid 13-digit EAN-13 (correct check digit). */
+function isValidEan13(v) {
+  if (!/^\d{13}$/.test(v)) return false;
+  let sum = 0;
+  for (let i = 0; i < 12; i++) sum += Number(v[i]) * (i % 2 === 0 ? 1 : 3);
+  return (10 - (sum % 10)) % 10 === Number(v[12]);
+}
+
+/**
+ * Render a scannable barcode to a PNG data URI. A valid 13-digit value prints as
+ * a proper retail **EAN-13**; anything else (custom SKU) falls back to CODE128.
+ * Values stay crisp on the ~1.5-inch price-tag and resolve straight to a product
+ * at billing.
+ */
+function barcodeDataUrl(value, { width = 2, height = 48, fontSize = 13 } = {}) {
+  const v = String(value);
+  const canvas = document.createElement('canvas');
+  const opts = { width, height, displayValue: true, fontSize, textMargin: 2, margin: 6, background: '#ffffff', lineColor: '#111111' };
+  JsBarcode(canvas, v, { ...opts, format: isValidEan13(v) ? 'EAN13' : 'CODE128' });
+  return canvas.toDataURL('image/png');
+}
 
 export default function AdminProducts() {
   const [products, setProducts] = useState(null);
@@ -78,45 +100,26 @@ export default function AdminProducts() {
       price: p.price, mrp: p.mrp, stock: p.stock, sold: p.sold_count, active: p.is_active ? 'yes' : 'no',
     })));
 
-  // Generate every product's QR onto ONE printable sheet — no downloading one
-  // label at a time. `list` = the products to label (all filtered, or selected).
-  const printQrLabels = async (list) => {
+  // Generate every product's barcode price-tag onto ONE printable sheet — no
+  // downloading one label at a time. `list` = products to label (all / selected).
+  const printQrLabels = (list) => {
     if (!list.length) { toast.error('No products to label'); return; }
-    const t = toast.loading(`Generating ${list.length} QR label(s)…`);
     try {
-      const labels = await Promise.all(list.map(async (p) => ({
-        ...p,
-        dataUrl: await QRCode.toDataURL(`${window.location.origin}/product/${p.slug}`,
-          { width: 320, margin: 1, errorCorrectionLevel: 'M' }),
-      })));
+      const labels = list.map((p) => ({ ...p, dataUrl: barcodeDataUrl(p.barcode || p.id) }));
       const w = window.open('', '_blank', 'width=900,height=1000');
       if (!w) { toast.error('Allow pop-ups to print'); return; }
-      const cards = labels.map((p) => `
-        <div class="label">
-          <img src="${p.dataUrl}" alt="QR">
-          <div class="name">${escapeHtml(p.name)}</div>
-          <div class="price">${escapeHtml(inr(p.price))}</div>
-          <div class="slug">${escapeHtml(p.slug)}</div>
-        </div>`).join('');
-      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>QR Labels (${labels.length})</title>
-        <style>
-          *{font-family:'Segoe UI',Arial,sans-serif;box-sizing:border-box}
-          body{margin:0;padding:12px}
-          .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-          .label{text-align:center;border:1px solid #ddd;border-radius:10px;padding:12px;page-break-inside:avoid}
-          img{width:150px;height:150px}
-          .name{font-weight:700;font-size:12px;margin:6px 0 2px;line-height:1.2}
-          .price{color:#8a6d1f;font-weight:700;font-size:13px}
-          .slug{color:#999;font-size:9px;margin-top:3px;word-break:break-all}
-          @media print{@page{margin:10mm}}
+      const cards = labels.map((p) => priceTag(p)).join('');
+      w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Barcode Labels (${labels.length})</title>
+        <style>${TAG_STYLE}
+          body{margin:0;padding:8mm}
+          .grid{display:flex;flex-wrap:wrap;gap:6mm}
+          @media print{@page{margin:8mm}}
         </style></head><body onload="window.print()">
         <div class="grid">${cards}</div>
         </body></html>`);
       w.document.close();
     } catch {
-      toast.error('Could not generate QR labels');
-    } finally {
-      toast.dismiss(t);
+      toast.error('Could not generate barcode labels');
     }
   };
 
@@ -133,8 +136,8 @@ export default function AdminProducts() {
             <Upload size={16} /> {importing ? 'Importing…' : 'Bulk Upload'}
           </button>
           <button onClick={doExport} className="btn-outline !py-2 text-sm"><Download size={16} /> Export</button>
-          <button onClick={() => printQrLabels(filtered)} className="btn-outline !py-2 text-sm" title="Print QR labels for all products">
-            <QrCode size={16} /> QR Labels
+          <button onClick={() => printQrLabels(filtered)} className="btn-outline !py-2 text-sm" title="Print barcode price-tags for all products">
+            <Barcode size={16} /> Barcode Labels
           </button>
           <Link to="/admin/products/new" className="btn-gold !py-2 text-sm"><Plus size={16} /> Add Product</Link>
         </div>
@@ -153,7 +156,7 @@ export default function AdminProducts() {
           <span className="font-medium">{selected.length} selected</span>
           <button onClick={() => bulk('activate')} className="flex items-center gap-1 rounded-lg px-3 py-1.5 hover:bg-gold/15"><Eye size={14} /> Activate</button>
           <button onClick={() => bulk('deactivate')} className="flex items-center gap-1 rounded-lg px-3 py-1.5 hover:bg-gold/15"><EyeOff size={14} /> Hide</button>
-          <button onClick={() => printQrLabels(products.filter((p) => selected.includes(p.id)))} className="flex items-center gap-1 rounded-lg px-3 py-1.5 hover:bg-gold/15"><QrCode size={14} /> QR Labels</button>
+          <button onClick={() => printQrLabels(products.filter((p) => selected.includes(p.id)))} className="flex items-center gap-1 rounded-lg px-3 py-1.5 hover:bg-gold/15"><Barcode size={14} /> Barcode Labels</button>
           <button onClick={() => bulk('delete')} className="flex items-center gap-1 rounded-lg px-3 py-1.5 text-rose-500 hover:bg-rose-500/10"><Trash2 size={14} /> Delete</button>
           <button onClick={() => setSelected([])} className="ml-auto text-gray-400 hover:text-gold">Clear</button>
         </div>
@@ -187,7 +190,7 @@ export default function AdminProducts() {
                 </td>
                 <td>
                   <div className="flex gap-1">
-                    <button onClick={() => setQrProduct(p)} title="QR label" className="rounded-lg p-2 hover:bg-gold/10"><QrCode size={16} /></button>
+                    <button onClick={() => setQrProduct(p)} title="Barcode label" className="rounded-lg p-2 hover:bg-gold/10"><Barcode size={16} /></button>
                     <Link to={`/admin/products/${p.id}/edit`} className="rounded-lg p-2 hover:bg-gold/10"><Pencil size={16} /></Link>
                     <button onClick={() => remove(p.id)} className="rounded-lg p-2 text-rose-500 hover:bg-rose-500/10"><Trash2 size={16} /></button>
                   </div>
@@ -203,16 +206,15 @@ export default function AdminProducts() {
   );
 }
 
-/** Generates a scannable QR label (encodes the product URL) for the in-store billing scanner. */
+/** Generates a scannable barcode price-tag (encodes the product id) for the in-store billing scanner. */
 function QrLabelModal({ product, onClose }) {
   const [dataUrl, setDataUrl] = useState('');
   const [copies, setCopies] = useState(1); // how many identical labels to print
-  const value = `${window.location.origin}/product/${product.slug}`;
 
+  const value = product.barcode || product.id;
   useEffect(() => {
-    QRCode.toDataURL(value, { width: 512, margin: 1, errorCorrectionLevel: 'M' })
-      .then(setDataUrl)
-      .catch(() => toast.error('Could not generate QR code'));
+    try { setDataUrl(barcodeDataUrl(value, { height: 70, fontSize: 16 })); }
+    catch { toast.error('Could not generate barcode'); }
   }, [value]);
 
   const printLabel = () => {
@@ -220,29 +222,14 @@ function QrLabelModal({ product, onClose }) {
     const n = Math.max(1, Math.min(500, Number(copies) || 1)); // clamp 1–500
     const w = window.open('', '_blank', 'width=900,height=1000');
     if (!w) { toast.error('Allow pop-ups to print'); return; }
-    const card = `
-      <div class="label">
-        <img src="${dataUrl}" alt="QR">
-        <div class="name">${escapeHtml(product.name)}</div>
-        <div class="price">${escapeHtml(inr(product.price))}</div>
-        <div class="slug">${escapeHtml(product.slug)}</div>
-      </div>`;
+    const card = priceTag({ ...product, dataUrl });
     const cards = Array.from({ length: n }, () => card).join('');
     // Single copy prints centred; multiple copies tile onto one printable sheet.
     const layout = n === 1
       ? 'body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh}'
-      : 'body{margin:0;padding:12px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}';
+      : 'body{margin:0;padding:8mm}.grid{display:flex;flex-wrap:wrap;gap:6mm}';
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(product.name)} — ${n} label(s)</title>
-      <style>
-        *{font-family:'Segoe UI',Arial,sans-serif;box-sizing:border-box}
-        ${layout}
-        .label{text-align:center;border:1px solid #ddd;border-radius:10px;padding:12px;page-break-inside:avoid;${n === 1 ? 'width:280px' : ''}}
-        img{width:${n === 1 ? 200 : 150}px;height:${n === 1 ? 200 : 150}px}
-        .name{font-weight:700;font-size:${n === 1 ? 15 : 12}px;margin:6px 0 2px;line-height:1.2}
-        .price{color:#8a6d1f;font-weight:700;font-size:${n === 1 ? 16 : 13}px}
-        .slug{color:#999;font-size:${n === 1 ? 10 : 9}px;margin-top:3px;word-break:break-all}
-        @media print{@page{margin:10mm}}
-      </style></head><body onload="window.print()">
+      <style>${TAG_STYLE}${layout}@media print{@page{margin:8mm}}</style></head><body onload="window.print()">
       ${n === 1 ? cards : `<div class="grid">${cards}</div>`}
       </body></html>`);
     w.document.close();
@@ -252,7 +239,7 @@ function QrLabelModal({ product, onClose }) {
     if (!dataUrl) return;
     const a = document.createElement('a');
     a.href = dataUrl;
-    a.download = `qr-${product.slug}.png`;
+    a.download = `barcode-${product.barcode || product.slug || product.id}.png`;
     a.click();
   };
 
@@ -261,16 +248,16 @@ function QrLabelModal({ product, onClose }) {
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="card relative z-10 w-full max-w-xs p-0">
         <div className="flex items-center justify-between border-b border-black/5 p-4 dark:border-white/10">
-          <h3 className="flex items-center gap-2 font-semibold"><QrCode size={17} className="text-gold" /> QR Label</h3>
+          <h3 className="flex items-center gap-2 font-semibold"><Barcode size={17} className="text-gold" /> Barcode Label</h3>
           <button onClick={onClose} className="rounded-lg p-1.5 hover:bg-black/5 dark:hover:bg-white/10"><X size={18} /></button>
         </div>
         <div className="p-5 text-center">
-          <div className="mx-auto flex h-52 w-52 items-center justify-center rounded-xl bg-white p-3">
-            {dataUrl ? <img src={dataUrl} alt="Product QR" className="h-full w-full" /> : <Spinner />}
+          <div className="mx-auto rounded-xl border border-black/10 bg-white px-3 py-4 dark:border-white/10">
+            <p className="text-sm font-bold text-black">{product.name}</p>
+            <p className="text-lg font-extrabold text-gold">{inr(product.price)}</p>
+            {dataUrl ? <img src={dataUrl} alt="Product barcode" className="mx-auto mt-1 w-full max-w-[240px]" /> : <Spinner />}
           </div>
-          <p className="mt-3 font-medium">{product.name}</p>
-          <p className="text-sm font-semibold text-gold">{inr(product.price)}</p>
-          <p className="mt-1 break-all text-[11px] text-gray-400">Scans to add this product at billing.</p>
+          <p className="mt-3 text-[11px] text-gray-400">~1.5 inch price-tag · scans to add this product at billing.</p>
 
           {/* How many identical labels to print (e.g. one per physical item). */}
           <div className="mt-4 flex items-center justify-center gap-2">
@@ -289,6 +276,24 @@ function QrLabelModal({ product, onClose }) {
       </div>
     </div>
   );
+}
+
+// ~1.5-inch price-tag sticker: product name, price, and the scannable barcode.
+const TAG_STYLE = `
+  *{font-family:'Segoe UI',Arial,sans-serif;box-sizing:border-box}
+  .tag{width:1.5in;min-height:1.5in;border:1px solid #bbb;border-radius:8px;padding:6px 8px 7px;
+       text-align:center;page-break-inside:avoid;display:inline-flex;flex-direction:column;
+       align-items:center;justify-content:center;gap:2px;background:#fff}
+  .tag .name{font-weight:700;font-size:10px;line-height:1.15;max-height:2.4em;overflow:hidden}
+  .tag .price{font-weight:800;font-size:17px;color:#8a6d1f;margin:2px 0}
+  .tag img{width:1.35in;height:auto;display:block}
+`;
+function priceTag(p) {
+  return `<div class="tag">
+    <div class="name">${escapeHtml(p.name)}</div>
+    <div class="price">${escapeHtml(inr(p.price))}</div>
+    <img src="${p.dataUrl}" alt="barcode">
+  </div>`;
 }
 
 function escapeHtml(s) {

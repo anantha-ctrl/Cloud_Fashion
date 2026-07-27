@@ -69,7 +69,7 @@ flowchart TB
 - **Invoices** — one unified list of **every sale** — online orders **+** counter bills — newest first, with channel filter (All / Online / Counter), KPIs, and **view + print** for each (thermal receipt for counter, A4 invoice for online), auto-refreshing; every printed online invoice carries a **delivery-verification QR** — scanning it opens a **public verify page** that confirms the order & its items **live from the DB** (signed token, tamper-proof)
 - **Cashiers** — create billing-counter staff logins (`cashier` role) that can access **only** the billing screen; block/unblock, reset password, per-cashier sales totals
 - **Notifications** — Bell with live alerts, **mark read/unread**, **delete**, **mark-all-read**
-- **Products** — Full CRUD, multiple images (Cloudinary or inline base64), variants, specifications, **bulk CSV import** (auto-creates categories)
+- **Products** — Full CRUD, multiple images (Cloudinary or inline base64), variants, specifications, an editable **barcode** (leave blank to **auto-generate a 13-digit EAN-13**), **bulk CSV import** (auto-creates categories)
 - **Categories** (clean auto-slugs), **Coupons** (percentage/fixed, min order, expiry, usage limit, **first-order-only**, **edit** support)
 - **Banners** — CRUD for homepage hero/promo banners
 - **Orders** — Filter by status, update lifecycle (pending → processing → packed → shipped → delivered / cancelled), set **carrier + tracking number**, **"Save & notify"** emails the customer; a **Payment Approvals** queue (badge count) surfaces UPI orders awaiting verification — open the proof (transaction id + screenshot) and **approve** (confirms the order, commits stock, emails the customer) or **reject** (emails the reason)
@@ -82,7 +82,7 @@ flowchart TB
 - **Messages** — Inbox for Contact Us submissions with unread badge, mark read/unread, one-click email reply
 - **Store Settings** — Edit store name, public contact details, message inbox, **announcement bar**, **free-shipping threshold + flat fee**, **social links & WhatsApp**, and the **online-payment details** (UPI ID, payee, optional custom QR image, bank account/IFSC) — all live on the storefront in real time
 - **Reports** — Date-range filter + presets, KPI cards (incl. **online vs counter revenue**), charts (daily revenue, orders by status, revenue by category, payment methods) — **all combine online + in-store billing** — CSV export, **Refresh** (revenue excludes cancelled)
-- **Product QR labels** — generate & print scannable QR stickers (encode the product URL) for the counter scanner: a single product, **N copies** of one product, or **all products on one sheet** (bulk)
+- **Product barcode labels** — generate & print scannable **1.5-inch price-tag stickers** (a real **EAN-13 / Code-128 barcode** + name & price) for the counter scanner: a single product, **N copies** of one product, or **all products on one sheet** (bulk)
 - **Storefront scope** — a `storefront_category` setting limits the whole storefront (listings, collections, filters, product pages, nav & footer categories) to one category + its children — currently **men-only**; other products stay in the DB, manageable in admin and sellable at the counter
 - **Store Settings → Brand** — upload a **store logo** + edit the store name; both go live everywhere (header, footer, admin, emails, invoices, thermal receipts) in real time
 - **Account dropdown** (Profile / Settings / Change Password / Logout), **static/sticky sidebar**, brand logo across all pages
@@ -95,7 +95,7 @@ flowchart TB
 CloudFashion/
 ├── database/
 │   ├── cloudfashion.sql          # Full schema + seed data
-│   └── migration_002…024.sql     # Incremental schema updates (see Migrations)
+│   └── migration_002…025.sql     # Incremental schema updates (see Migrations)
 ├── backend/                      # PHP API (front-controller, no Composer needed)
 │   ├── bootstrap.php             # Loads env, core, autoloader
 │   ├── index.php                 # Router + CORS
@@ -129,7 +129,7 @@ CloudFashion/
 (in-store billing/POS) — plus new columns
 (`reviews.is_hidden`; `users.loyalty_points/referral_code/referred_by`;
 `orders.points_used/points_earned`; `orders.status` `returned` state;
-**`users.role` gains `cashier`**).
+**`users.role` gains `cashier`**; **`products.barcode`** (EAN-13)).
 
 ### Entity-Relationship Diagram
 
@@ -173,6 +173,7 @@ erDiagram
         bigint id PK
         bigint category_id FK
         string slug
+        string barcode "EAN-13 (auto-generated)"
         decimal price
         int stock
     }
@@ -229,6 +230,7 @@ erDiagram
 | `migration_022.sql` | **Split payment** — replaces billing `other` method with `split` (`split_cash` + `split_digital`) |
 | `migration_023.sql` | **Storefront scope** — `storefront_category` setting limits the storefront to one category + children (e.g. men-only) |
 | `migration_024.sql` | **UPI / QR payment** — adds `upi` to `orders.payment_method` + proof/approval columns (`payment_txn_id`, `payment_screenshot`, `payment_approval`, `payment_note`, `payment_reviewed_at`) and UPI/bank payee settings |
+| `migration_025.sql` | **Product barcode** — `products.barcode` column (+ index) for a scannable **EAN-13** printed on the price-tag; auto-generated when left blank |
 
 ```bash
 # apply every migration in order (phpMyAdmin or CLI)
@@ -276,7 +278,7 @@ Test it: open `http://localhost/CloudFashion/backend/` → `{"success":true,...}
 ```bash
 cd frontend
 npm install
-npm run dev        # http://localhost:5190 (port pinned via strictPort)
+npm run dev        # http://localhost:5181 (port pinned via strictPort)
 ```
 
 `frontend/.env`:
@@ -306,7 +308,7 @@ Edit `backend/.env`:
 | `GOOGLE_CLIENT_ID` | Google Sign-In (optional). Must match `VITE_GOOGLE_CLIENT_ID` in `frontend/.env`. Without it the button shows a "not configured" message |
 
 > **Google Sign-In:** create an OAuth 2.0 **Web** client in Google Cloud Console, add your
-> frontend origin (e.g. `http://localhost:5190`) to *Authorized JavaScript origins*, and paste the
+> frontend origin (e.g. `http://localhost:5181`) to *Authorized JavaScript origins*, and paste the
 > Client ID into **both** `backend/.env` (`GOOGLE_CLIENT_ID`) and `frontend/.env`
 > (`VITE_GOOGLE_CLIENT_ID`). The backend verifies the token's `aud` before creating/linking the user.
 
@@ -363,7 +365,7 @@ CRUD   /api/admin/staff              (cashier accounts)
 
 # billing / POS  (Authorization: Bearer <admin OR cashier jwt>)
 GET    /api/admin/billing/config     GET    /api/admin/billing/products?q=
-GET    /api/admin/billing/lookup?code=   (resolve scanned QR/barcode)
+GET    /api/admin/billing/lookup?code=   (resolve scanned barcode/QR — matches id · slug · barcode · sku)
 GET    /api/admin/billing/customer-lookup?phone=   (link a returning customer)
 GET    /api/admin/billing            POST   /api/admin/billing         (create bill; split payment supported)
 GET    /api/admin/billing/{id}       PUT    /api/admin/billing/{id}/void
@@ -466,7 +468,8 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** for production deployment.
 
 ## 🆕 What's New (post-launch updates)
 
-### Latest wave — UPI/QR online payment, admin verification, invoice QR & customer export
+### Latest wave — UPI/QR online payment, admin verification, invoice QR, barcodes & customer export
+- **Product barcodes (EAN-13)** — every product now carries a **barcode** you can edit in the product form, or **leave blank to auto-generate a valid 13-digit EAN-13** (in-store `200`-prefix + zero-padded id + check digit — always unique, migration 025). The label printer prints a real **1.5-inch price-tag** (scannable EAN-13/Code-128 + name + price), and the counter **camera/hardware scanner** resolves a scanned barcode straight to the product for billing (`/api/admin/billing/lookup` matches id · slug · barcode · sku).
 - **Invoice delivery-verification QR** — every printed online invoice now carries a QR that encodes a **signed link**; scanning it opens a **public verify page** (`/verify-order/:id`) showing the order, items, ship-to and status **live from the DB** so a courier can confirm the parcel. Token is an HMAC of the order id + number — tamper-proof, no enumeration. Backed by public `GET /api/orders/verify/{id}`.
 - **UPI / QR online payment (no gateway required)** — "Pay Online" now shows a **scannable UPI QR** encoding the exact amount, plus UPI ID and bank details. The customer enters the **transaction id** and uploads a **payment screenshot**; the order is placed as **"awaiting verification"** (migration 024). Backed by `GET /api/payment-info` + `POST /api/orders/upi`.
 - **Admin payment approval** — a **Payment Approvals** queue in Admin → Orders (with a live badge) shows the proof (txn id + screenshot); **Approve** confirms the order (commits stock + loyalty, emails the customer), **Reject** emails the reason. The store admin is emailed the moment a payment is submitted. (`GET`/`PUT /api/admin/orders/{id}/payment`.)

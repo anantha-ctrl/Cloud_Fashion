@@ -6,7 +6,7 @@ import api from '../api/client';
 import { Spinner, Checkbox } from '../components/ui';
 
 const blank = {
-  name: '', category_id: '', brand: '', description: '', price: '', mrp: '',
+  name: '', category_id: '', barcode: '', brand: '', description: '', price: '', mrp: '',
   stock: 0, low_stock_alert: 5, is_featured: 0, is_trending: 0, is_active: 1,
 };
 
@@ -30,7 +30,7 @@ export default function AdminProductForm() {
         const p = r.data.data.find((x) => String(x.id) === String(id));
         if (p) {
           setForm({
-            name: p.name, category_id: '', brand: p.brand || '', description: '', price: p.price,
+            name: p.name, category_id: '', barcode: p.barcode || '', brand: p.brand || '', description: '', price: p.price,
             mrp: p.mrp, stock: p.stock, low_stock_alert: 5,
             is_featured: p.is_featured, is_trending: p.is_trending, is_active: p.is_active,
           });
@@ -96,6 +96,10 @@ export default function AdminProductForm() {
           </Field>
           <Field label="Brand"><input className="input" value={form.brand} onChange={(e) => set('brand', e.target.value)} /></Field>
         </div>
+        <Field label="Barcode (optional — printed on the price-tag; leave empty to auto-generate a 13-digit EAN-13)">
+          <input className="input" placeholder="Auto-generated (13 digits) — or type your own, e.g. 8901234567890" value={form.barcode}
+            onChange={(e) => set('barcode', e.target.value)} />
+        </Field>
         <Field label="Description"><textarea rows={3} className="input" value={form.description} onChange={(e) => set('description', e.target.value)} /></Field>
         <div className="grid gap-4 sm:grid-cols-4">
           <Field label="Price (₹)"><input type="number" required className="input" value={form.price} onChange={(e) => set('price', e.target.value)} /></Field>

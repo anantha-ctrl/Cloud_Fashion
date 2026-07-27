@@ -5,7 +5,7 @@ class AdminProductController
     {
         Auth::admin();
         $rows = db()->query(
-            "SELECT p.id, p.name, p.slug, p.brand, p.price, p.mrp, p.stock, p.is_active, p.is_featured,
+            "SELECT p.id, p.name, p.slug, p.barcode, p.brand, p.price, p.mrp, p.stock, p.is_active, p.is_featured,
                     p.is_trending, p.rating_avg, p.sold_count, c.name AS category,
                     (SELECT image_url FROM product_images WHERE product_id=p.id ORDER BY is_primary DESC LIMIT 1) AS image
              FROM products p JOIN categories c ON c.id=p.category_id ORDER BY p.created_at DESC"
@@ -28,13 +28,14 @@ class AdminProductController
         }
         $db = db();
         $slug = AdminCategoryController::slugify($data['name']);
+        $barcode = trim((string) ($data['barcode'] ?? '')) ?: null;
         $db->prepare(
             'INSERT INTO products
-             (name, slug, category_id, brand, description, specifications, price, mrp, stock, low_stock_alert,
+             (name, slug, barcode, category_id, brand, description, specifications, price, mrp, stock, low_stock_alert,
               is_featured, is_trending, is_active)
-             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
+             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
         )->execute([
-            $data['name'], $slug, (int) $data['category_id'], $data['brand'] ?? null,
+            $data['name'], $slug, $barcode, (int) $data['category_id'], $data['brand'] ?? null,
             $data['description'] ?? null,
             isset($data['specifications']) ? json_encode($data['specifications']) : null,
             $data['price'], $data['mrp'], (int) ($data['stock'] ?? 0), (int) ($data['low_stock_alert'] ?? 5),
@@ -43,10 +44,38 @@ class AdminProductController
         ]);
         $productId = (int) $db->lastInsertId();
 
+        // Auto-generate a unique 13-digit EAN-13 barcode when none was supplied.
+        if ($barcode === null) {
+            $barcode = self::generateBarcode($productId);
+            $db->prepare('UPDATE products SET barcode=? WHERE id=?')->execute([$barcode, $productId]);
+        }
+
         $this->syncImages($productId, $data['images'] ?? []);
         $this->syncVariants($productId, $data['variants'] ?? []);
 
-        Response::success(['id' => $productId, 'slug' => $slug], 'Product created', 201);
+        Response::success(['id' => $productId, 'slug' => $slug, 'barcode' => $barcode], 'Product created', 201);
+    }
+
+    /** EAN-13 check digit for a 12-digit numeric string. */
+    private static function ean13Check(string $twelve): int
+    {
+        $sum = 0;
+        for ($i = 0; $i < 12; $i++) {
+            $sum += (int) $twelve[$i] * ($i % 2 === 0 ? 1 : 3);
+        }
+        return (10 - ($sum % 10)) % 10;
+    }
+
+    /**
+     * Deterministic, unique 13-digit EAN-13 barcode for a product.
+     * Prefix `200` is reserved for in-store / restricted circulation (safe for a
+     * private catalogue), then the 9-digit zero-padded product id, then the check
+     * digit — so it is always valid, unique, and stable for reprinting.
+     */
+    public static function generateBarcode(int $productId): string
+    {
+        $body = '200' . str_pad((string) $productId, 9, '0', STR_PAD_LEFT); // 12 digits
+        return $body . self::ean13Check($body);
     }
 
     public function update(array $p): void
@@ -55,16 +84,22 @@ class AdminProductController
         $id = (int) $p['id'];
         $data = Request::body();
         $db = db();
+        $barcode = trim((string) ($data['barcode'] ?? '')) ?: null;
         $db->prepare(
-            'UPDATE products SET name=?, category_id=?, brand=?, description=?, specifications=?,
+            'UPDATE products SET name=?, barcode=?, category_id=?, brand=?, description=?, specifications=?,
              price=?, mrp=?, stock=?, low_stock_alert=?, is_featured=?, is_trending=?, is_active=? WHERE id=?'
         )->execute([
-            $data['name'], (int) $data['category_id'], $data['brand'] ?? null, $data['description'] ?? null,
+            $data['name'], $barcode, (int) $data['category_id'], $data['brand'] ?? null, $data['description'] ?? null,
             isset($data['specifications']) ? json_encode($data['specifications']) : null,
             $data['price'], $data['mrp'], (int) ($data['stock'] ?? 0), (int) ($data['low_stock_alert'] ?? 5),
             !empty($data['is_featured']) ? 1 : 0, !empty($data['is_trending']) ? 1 : 0,
             isset($data['is_active']) ? (int) $data['is_active'] : 1, $id,
         ]);
+
+        // Keep every product barcoded — regenerate a 13-digit EAN-13 if cleared.
+        if ($barcode === null) {
+            $db->prepare('UPDATE products SET barcode=? WHERE id=?')->execute([self::generateBarcode($id), $id]);
+        }
 
         if (isset($data['variants'])) {
             $db->prepare('DELETE FROM product_variants WHERE product_id=?')->execute([$id]);
