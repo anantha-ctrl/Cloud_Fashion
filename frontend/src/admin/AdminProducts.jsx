@@ -38,7 +38,7 @@ export default function AdminProducts() {
   const [qrProduct, setQrProduct] = useState(null); // product whose QR label is open
   const fileRef = useRef(null);
 
-  const load = () => api.get('/api/admin/products').then((r) => { setProducts(r.data.data); setSelected([]); }).catch(() => {});
+  const load = () => api.get('/api/admin/products').then((r) => { setProducts(Array.isArray(r.data.data) ? r.data.data : []); setSelected([]); }).catch(() => setProducts([]));
   useEffect(() => { load(); }, []);
 
   // ---- CSV bulk upload ----

@@ -11,7 +11,7 @@ class Database
         if (self::$pdo === null) {
             $host = env('DB_HOST', '127.0.0.1');
             $port = env('DB_PORT', '3306');
-            $name = env('DB_NAME', 'cloudfashion');
+            $name = env('DB_NAME', 'novoclothing_db');
             $dsn = "mysql:host=$host;port=$port;dbname=$name;charset=utf8mb4";
             try {
                 self::$pdo = new PDO($dsn, env('DB_USER', 'root'), env('DB_PASS', 'anantha'), [
