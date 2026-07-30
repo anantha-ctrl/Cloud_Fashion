@@ -30,19 +30,65 @@ export default function CollectionShowcase({
             <span className={`text-xs uppercase tracking-[0.4em] ${accent}`}>{eyebrow}</span>
           </div>
           <h2 className="font-display text-5xl font-bold leading-[0.98] sm:text-7xl">
-            <MaskReveal lines={title} />
+            {Array.isArray(title) ? (
+              <MaskReveal lines={title} />
+            ) : (
+              <span className="block">{title}</span>
+            )}
           </h2>
+
           <motion.p
             initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
             transition={{ delay: 0.2, duration: 0.7 }}
-            className={`mt-7 max-w-md text-lg leading-relaxed ${dark ? 'text-white/70' : 'text-luxe-ink/70 dark:text-white/70'}`}
+            className={`mt-6 max-w-lg text-lg leading-relaxed ${dark ? 'text-white/70' : 'text-luxe-ink/70 dark:text-white/70'}`}
           >
             {description}
           </motion.p>
+
+          {/* Highlights & Category Tags - Fills empty space perfectly */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
+            transition={{ delay: 0.25, duration: 0.7 }}
+            className="mt-6 space-y-4"
+          >
+            {/* Quick Filter Tags */}
+            <div className="flex flex-wrap gap-2">
+              {['Formal Twills', 'Linen Shirts', 'Oversized Fits', 'Luxury Polos'].map((tag) => (
+                <span key={tag} className={`rounded-full px-3 py-1 text-xs font-medium border ${
+                  dark
+                    ? 'border-white/15 bg-white/10 text-white/90'
+                    : 'border-black/10 bg-black/5 text-luxe-ink dark:border-white/15 dark:bg-white/10 dark:text-white'
+                }`}>
+                  {tag}
+                </span>
+              ))}
+            </div>
+
+            {/* Feature Bullets */}
+            <div className={`grid gap-3 pt-2 text-xs ${dark ? 'text-white/80' : 'text-luxe-ink/80 dark:text-white/80'} sm:grid-cols-2`}>
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-luxe-bronze/20 text-[10px] text-luxe-bronze font-bold">✓</span>
+                <span>18 Stitches/Inch Durability</span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-luxe-bronze/20 text-[10px] text-luxe-bronze font-bold">✓</span>
+                <span>Pre-Shrunk Organic Cotton</span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-luxe-bronze/20 text-[10px] text-luxe-bronze font-bold">✓</span>
+                <span>30-Day Free Size Swaps</span>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-5 w-5 items-center justify-center rounded-full bg-luxe-bronze/20 text-[10px] text-luxe-bronze font-bold">✓</span>
+                <span>Express Pan-India Shipping</span>
+              </div>
+            </div>
+          </motion.div>
+
           <motion.div
             initial={{ opacity: 0, y: 24 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true }}
             transition={{ delay: 0.3, duration: 0.7 }}
-            className="mt-10"
+            className="mt-8"
           >
             <MagneticButton
               to={to}

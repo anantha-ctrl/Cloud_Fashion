@@ -256,8 +256,8 @@ This creates the `cloudfashion` database with sample products, categories, and t
 
 | Role     | Email                       | Password   |
 |----------|-----------------------------|------------|
-| Admin    | `admin@novaclothing.com`    | `Admin@123`|
-| Customer | `customer@novaclothing.com` | `Test@123` |
+| Admin    | `admin@novoclothing.in`     | `Admin@123`|
+| Customer | `customer@novoclothing.in`  | `Test@123` |
 
 ### 2. Backend
 The project lives in `htdocs`, so Apache serves it automatically.

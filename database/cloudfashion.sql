@@ -284,8 +284,8 @@ SET FOREIGN_KEY_CHECKS = 1;
 -- Admin user (password: Admin@123) and demo customer (password: Test@123)
 -- Hashes are bcrypt; regenerate with backend/scripts/hash.php if needed.
 INSERT INTO users (name, email, password_hash, role, is_verified) VALUES
-('Nova Admin', 'admin@novaclothing.com', '$2y$10$XZ4IAbRvJfYsIs/aD55N6O7UOsIWAljynLIakfzMGT3PtzdHVwaFy', 'admin', 1),
-('Demo Customer', 'customer@novaclothing.com', '$2y$10$fl/qW.4uARZe6MmBmnl3MOLk5dRkQwadd1vGOzrBEP8563/cJyZhy', 'customer', 1);
+('Nova Admin', 'admin@novoclothing.in', '$2y$10$XZ4IAbRvJfYsIs/aD55N6O7UOsIWAljynLIakfzMGT3PtzdHVwaFy', 'admin', 1),
+('Demo Customer', 'customer@novoclothing.in', '$2y$10$fl/qW.4uARZe6MmBmnl3MOLk5dRkQwadd1vGOzrBEP8563/cJyZhy', 'customer', 1);
 
 -- Top-level categories
 INSERT INTO categories (name, slug, description, is_active) VALUES

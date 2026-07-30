@@ -9,14 +9,15 @@ export default function AdminCategories() {
   const [form, setForm] = useState({ id: null, name: '', description: '', image_url: '', parent_id: '', is_active: 1 });
   const [show, setShow] = useState(false);
 
-  const load = () => api.get('/api/admin/categories').then((r) => setCats(r.data.data)).catch(() => {});
+  const load = () => api.get('/api/admin/categories').then((r) => setCats(Array.isArray(r.data.data) ? r.data.data : [])).catch(() => setCats([]));
   useEffect(() => { load(); }, []);
 
   const save = async (e) => {
     e.preventDefault();
+    const payload = { ...form, parent_id: form.parent_id || null };
     try {
-      if (form.id) await api.put(`/api/admin/categories/${form.id}`, form);
-      else await api.post('/api/admin/categories', form);
+      if (form.id) await api.put(`/api/admin/categories/${form.id}`, payload);
+      else await api.post('/api/admin/categories', payload);
       toast.success('Saved');
       setShow(false); setForm({ id: null, name: '', description: '', image_url: '', parent_id: '', is_active: 1 });
       load();

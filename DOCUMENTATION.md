@@ -551,9 +551,9 @@ Apply after the base `cloudfashion.sql`, in order:
 
 | Role | Email | Password |
 |------|-------|----------|
-| Admin | `admin@novaclothing.com` | `Admin@123` |
-| Customer | `customer@novaclothing.com` | `Test@123` |
-| Cashier | `cashier@novaclothing.com` | *(set in Admin → Cashiers)* |
+| Admin | `admin@novoclothing.in` | `Admin@123` |
+| Customer | `customer@novoclothing.in` | `Test@123` |
+| Cashier | `cashier@novoclothing.in` | *(set in Admin → Cashiers)* |
 
 > Change the default admin password after first login in production.
 

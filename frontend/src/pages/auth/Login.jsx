@@ -94,9 +94,6 @@ export default function Login() {
         <GoogleIcon /> Continue with Google
       </button>
 
-      <p className="mt-4 rounded-xl bg-gold/5 p-3 text-center text-xs text-gray-400">
-        Demo — Admin: admin@novaclothing.com / Admin@123 · Customer: customer@novaclothing.com / Test@123
-      </p>
     </AuthShell>
   );
 }
