@@ -468,7 +468,13 @@ See **[DEPLOYMENT.md](DEPLOYMENT.md)** for production deployment.
 
 ## 🆕 What's New (post-launch updates)
 
-### Latest wave — UPI/QR online payment, admin verification, invoice QR, barcodes & customer export
+### Latest wave — Balanced UI layouts, database truncation tool, login updates & product fixes
+- **Balanced Editorial Landing Layout** — Enriched the **Brand Philosophy** and **Men Collection** sections with 3D feature pillar cards (Long-Staple Weave, Master Tailoring, Eco-Conscious Pigments), category filter chips, and a 4-point craftsmanship checklist to eliminate excessive empty space.
+- **Database Reset & Workbench Support** — Added a dedicated reset script (`database/truncate_workbench.sql`) and backend API endpoint (`/api/truncate-db`) to wipe operational data (products, categories, orders) while preserving the master `admin@novoclothing.in` account.
+- **Admin Credentials Update** — Master admin credentials updated to `admin@novoclothing.in` (`Admin@123`) across all database seeds, login screens, and docs.
+- **Array Safety & Category Parent Fixes** — Added `Array.isArray` guards for admin product lists and sanitized `parent_id` handling for top-level category creation in PHP backend.
+
+### Earlier wave — UPI/QR online payment, admin verification, invoice QR, barcodes & customer export
 - **Product barcodes (EAN-13)** — every product now carries a **barcode** you can edit in the product form, or **leave blank to auto-generate a valid 13-digit EAN-13** (in-store `200`-prefix + zero-padded id + check digit — always unique, migration 025). The label printer prints a real **1.5-inch price-tag** (scannable EAN-13/Code-128 + name + price), and the counter **camera/hardware scanner** resolves a scanned barcode straight to the product for billing (`/api/admin/billing/lookup` matches id · slug · barcode · sku).
 - **Invoice delivery-verification QR** — every printed online invoice now carries a QR that encodes a **signed link**; scanning it opens a **public verify page** (`/verify-order/:id`) showing the order, items, ship-to and status **live from the DB** so a courier can confirm the parcel. Token is an HMAC of the order id + number — tamper-proof, no enumeration. Backed by public `GET /api/orders/verify/{id}`.
 - **UPI / QR online payment (no gateway required)** — "Pay Online" now shows a **scannable UPI QR** encoding the exact amount, plus UPI ID and bank details. The customer enters the **transaction id** and uploads a **payment screenshot**; the order is placed as **"awaiting verification"** (migration 024). Backed by `GET /api/payment-info` + `POST /api/orders/upi`.
